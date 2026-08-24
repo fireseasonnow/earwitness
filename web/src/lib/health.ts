@@ -29,9 +29,9 @@ const STALE_MS = 3 * 60 * 1000;
 
 /**
  * A heartbeat only proves the loop is turning, not that it is getting anywhere.
- * On 2026-08-22 the tracker ticked healthily for 28 minutes without logging a
- * play — a stale-URL stall that reset the failure streak on every retry, so
- * nothing downstream could see it. Silence this long is itself a symptom: tracks
+ * The tracker once ticked healthily for 28 minutes without logging a play — a
+ * stale-URL stall that reset the failure streak on every retry, so nothing
+ * downstream could see it. Silence this long is itself a symptom: tracks
  * run 2-4 minutes, and a song the stitcher cannot read is still recorded from
  * its best fragment, so nothing legitimately produces a gap this size.
  *

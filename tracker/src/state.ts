@@ -103,8 +103,8 @@ function isPlayShaped(v: unknown): v is Play {
  *
  * The previous shape check tested `typeof version === "number"` and discarded
  * the result, which is why the two processes drifted across a mid-day restart
- * on 2026-08-23 with `version` sitting at 1 throughout. A field whose whole job
- * is to catch that has to be compared against a value.
+ * with `version` sitting at 1 throughout. A field whose whole job is to catch
+ * that has to be compared against a value.
  */
 function isShaped(v: unknown): v is State {
   const s = v as State | null;
@@ -192,10 +192,10 @@ export interface ResolvedCredit {
  * cut it at different points. Levenshtein rates a rotation as maximally
  * different — two full copies of the moved text — so plain edit distance filed
  * `Ben Seretan — walls are humming` and `Seretan — walls are humming Ben` as
- * two songs and logged the same song three times running on 2026-08-23. The
- * tick fingerprint (`isSameSong`) already matched rotations against the doubled
- * unit; this is the dedup path agreeing with it, which is the same class of
- * divergence the fingerprint already closed.
+ * two songs and logged the same song three times running. The tick fingerprint
+ * (`isSameSong`) already matched rotations against the doubled unit; this is
+ * the dedup path agreeing with it, which is the same class of divergence the
+ * fingerprint already closed.
  *
  * Allocates nothing and mutates nothing. Two properties matter:
  *
@@ -240,8 +240,8 @@ export interface RecordedPlay extends ResolvedCredit {
  * `currentUnit` by edit distance while resolution compared against the stored
  * one. Two stitches can each sit within budget of the stored credit yet
  * more than a budget apart from each other, so the two decisions could
- * disagree — that is how one song was logged twice, 63 s apart, on 2026-07-30.
- * Comparing resolved identity makes divergence impossible.
+ * disagree — that is how one song was logged twice, 63 s apart. Comparing
+ * resolved identity makes divergence impossible.
  *
  * The state is re-read from disk on every call rather than held in memory.
  * That keeps the file the single source of truth, and it is what makes

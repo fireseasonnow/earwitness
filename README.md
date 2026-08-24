@@ -4,6 +4,10 @@ An independent play log for [Claude FM](https://www.youtube.com/@claude/live),
 Anthropic's 24/7 stream. One always-on page showing what it has played **today**.
 Unofficial, and not affiliated with Anthropic.
 
+![The page on air — hero, health line, and the day's log](docs/screenshot-1440.png)
+
+*Drawn at 1440. The plays above are seeded sample data, not a real capture.*
+
 Two supervised processes on one host, no AI calls.
 
 - `tracker/` — Bun + TypeScript loop: every 30 s it OCRs the credit ticker from
@@ -102,10 +106,12 @@ One responsive page, drawn at 1440, 834 and 390.
 The mark is *Pixel Note*, an eighth note on a 12×12 grid: 21 blocks, one
 geometry from the header down to the favicon, drawn in `currentColor` so it
 inherits the health tone — terracotta on air, grey off air, ochre in trouble.
-The palette is sampled off a live frame of the stream, so the page reads as a
-companion to what it tracks; both sampled accents are too light for small text,
-so each runs in two tiers and the `-text` suffix marks the one that may set
-type. Type is Roboto Mono, behind the platform monospace stack.
+The live accent is Claude's own orange and the ochre is sampled off a live frame
+of the stream, so the page reads as a companion to what it tracks. The orange
+runs at one tier — the mark, the wordmark and the `now` chip carry the literal
+#d97757, at a measured 2.8:1 on paper. Ochre stays in two tiers, where the
+`-text` suffix marks the one that may set type. Type is Roboto Mono, behind the
+platform monospace stack.
 
 The design system *is* Tailwind's theme: `web/src/styles/global.css` declares the
 palette, ten type steps, six tracking values and exactly two breakpoints (700px
@@ -120,8 +126,8 @@ Two states the page deliberately does not have:
   — same ochre treatment, the silence reported instead of the count. It goes to
   the journal.
 - **The log is never truncated.** With no archive and no client-side JavaScript,
-  a "172 earlier plays" label leads nowhere, so the day renders in full (~420
-  rows is 136 KB) and the total stays in the log header.
+  a "172 earlier plays" label leads nowhere, so the day renders in full (a full
+  day's ~450 rows is ≈150 KB) and the total stays in the log header.
 
 ## Health
 
@@ -187,8 +193,8 @@ and only the observation: `detectedAt`, the clock at the moment the tracker
 what the six-minute "now" window absorbs — and `credit`, the stitched reading of
 the ticker. Artist and title are `parseUnit(credit)` and are derived by each
 reader at the point of use, so a parser fix improves the morning's rows on the
-next render instead of waiting for midnight. 113 B/play measured on 2026-08-23,
-about 50 KB at a full day's ~450 plays.
+next render instead of waiting for midnight. 113 B/play, about 50 KB at a full
+day's ~450 plays.
 
 Plays are appended chronologically, and that order is what the health state
 depends on — the newest play is the last element. The page renders them newest
@@ -243,7 +249,7 @@ There is no migration and there will not be one. State lives at most 24 hours by
 design, so a format change costs whatever part of one Amsterdam day has
 accumulated when the new binary starts.
 
-## Field toolkit (verified 2026-07-30, re-confirmed 2026-08-22 — reuse, don't re-derive)
+## Field toolkit
 
 All capture constants live in `tracker/src/config.ts`. Measured facts: crop
 `crop=520:70:1390:30` at 1080p; marquee scrolls ≈ 4 chars/s with a ~1–2 s hold
@@ -253,7 +259,7 @@ at the unit start each loop; the ♪ glyph between loop repetitions OCRs as `C`,
 
 ```bash
 # resolve the stream URL (the ~6 h embedded expiry is a lie: the media playlist
-# is a sliding window and dies after ~25-30 s — measured 2026-08-23)
+# is a sliding window and dies after ~25-30 s)
 URL=$(yt-dlp -g 'https://www.youtube.com/@claude/live')
 
 # single tick by hand: one cropped frame + OCR

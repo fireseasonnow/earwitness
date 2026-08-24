@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { resolveStateDir } from "@earwitness/shared";
 
-// All capture constants were measured live on 2026-07-30 (see README).
+// All capture constants were measured live (see README).
 // Do not re-derive them; if the overlay ever moves, re-locate the crop with
 // the full-frame command in the README and update `crop` here.
 export const CONFIG = {
@@ -18,8 +18,8 @@ export const CONFIG = {
   // `yt-dlp -g` returns a media-playlist URL, not a durable stream URL: it is a
   // snapshot of a sliding window of 2 s segments and stops working after ~25-30 s
   // ("Error when loading first segment"), whatever the 6 h expiry in its
-  // signature claims. Measured 2026-08-23. Keep this WELL under the tick
-  // interval or every tick pays a failed capture before re-resolving.
+  // signature claims. Keep this WELL under the tick interval or every tick
+  // pays a failed capture before re-resolving.
   urlMaxAgeMs: 20_000,
   emptyOcrThreshold: 3, // consecutive empty ticks before one log line
 

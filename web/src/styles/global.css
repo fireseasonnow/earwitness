@@ -6,20 +6,25 @@
  */
 @theme {
   /* ---- Palette ------------------------------------------------------------
-   * Sampled from a live frame of the stream on 2026-08-22, so the page sits in
-   * visual sympathy with what it tracks.
+   * Ochre is sampled from a live frame of the stream. The live accent is
+   * Claude's own orange (#d97757), so the page sits in visual sympathy with
+   * the station it logs.
    *
-   * Both sampled accents fail small text on paper — terracotta 3.6:1, ochre
-   * 1.7:1 — so each runs in two tiers. The `-text` suffix is the whole
-   * enforcement mechanism: a token without it is a mark or a fill and must not
-   * set type. `--color-ochre` sets no text on paper at any size.
+   * The live accent runs at ONE tier by choice: mark, type and chip all carry
+   * the literal #d97757 rather than an approximation of it, so the note and the
+   * wordmark are the same orange. The cost is measured and accepted — 2.8:1 on
+   * paper, under the 4.5:1 small text normally wants.
+   *
+   * Ochre still runs in two tiers, and there the `-text` suffix remains the
+   * enforcement mechanism: `--color-ochre` sets no text on paper at any size.
    */
   --color-paper: #f5f3ed; /* ground */
   --color-ink: #2a2822; /* body, halftone         13.3:1 */
 
-  --color-terra: #bf684d; /* live · marks            3.6:1 */
-  --color-terra-text: #a5512f; /* live · text, chip fill  5.0:1 */
-  --color-terra-hover: #8f4526; /* link hover */
+  --color-terra: #d97757; /* live · mark, type, chip 2.8:1 */
+  --color-terra-text: #d97757; /* alias of the above: one tier, kept so the
+                                  call sites keep reading as intent */
+  --color-terra-hover: #85381e; /* link hover              7.3:1 */
 
   --color-ochre: #efb154; /* fills only              1.7:1 */
   --color-ochre-text: #8a5f22; /* attention · text        5.1:1 */

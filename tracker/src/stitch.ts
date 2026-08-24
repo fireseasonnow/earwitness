@@ -156,9 +156,9 @@ interface SeparatorCandidate {
  * The ` — ` count below is supposed to catch that and cannot: a rotation that
  * lands on the separator strips the leading space off the duplicate
  * (`— walls are humming Ben Seretan — walls are humming`), and heavy OCR noise
- * degrades it outright (` n ` for `an — ` on 2026-08-23), leaving exactly one
- * ` — ` in a string holding the song twice. Comparing the halves does not care
- * how the second separator was mangled.
+ * degrades it outright (` n ` for `an — `), leaving exactly one ` — ` in a
+ * string holding the song twice. Comparing the halves does not care how the
+ * second separator was mangled.
  */
 function looksDoubled(unit: string): boolean {
   if (unit.length < 20) return false;

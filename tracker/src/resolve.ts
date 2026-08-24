@@ -8,8 +8,8 @@ import { run } from "./proc";
  * The ~6 h expiry embedded in the URL's signature is a lie, and this comment
  * used to repeat it. `yt-dlp -g` hands back a MEDIA playlist: a snapshot of a
  * sliding window of 2 s segments that stops working after ~25-30 s whatever the
- * signature claims (measured 2026-08-23). Hence 20 s, which has to stay well
- * under the 30 s tick or every tick pays a failed capture before re-resolving.
+ * signature claims. Hence 20 s, which has to stay well under the 30 s tick or
+ * every tick pays a failed capture before re-resolving.
  */
 export class StreamUrl {
   private url: string | null = null;

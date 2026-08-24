@@ -24,7 +24,9 @@ const hero = heroFor(state);
       {/* The mark inherits the health tone — grey off air, ochre in trouble. */}
       <Mark class={toneMark[hero.tone]} />
       <div class="flex flex-wrap items-baseline gap-[9px]">
-        <span class="text-note font-medium uppercase tracking-label md:text-row md:tracking-brand">
+        <span
+          class="text-note font-medium uppercase tracking-label text-terra-text md:text-row md:tracking-brand"
+        >
           Earwitness
         </span>
         <span class="text-micro uppercase tracking-tagline text-muted md:text-label">
