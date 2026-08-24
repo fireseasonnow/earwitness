@@ -1,0 +1,11 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    // `bun:test` and `import.meta.dir` in `test/`. Named explicitly the way
+    // `tracker/` and `shared/` do: @types/bun pulls @types/node in behind it,
+    // which is what covers the `node:fs` imports in `src/lib/state.ts`.
+    "types": ["bun"]
+  },
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"]
+}

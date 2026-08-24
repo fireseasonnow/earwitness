@@ -1,0 +1,322 @@
+# Earwitness
+
+An independent play log for [Claude FM](https://www.youtube.com/@claude/live),
+Anthropic's 24/7 stream. One always-on page showing what it has played **today**.
+Unofficial, and not affiliated with Anthropic.
+
+Two supervised processes on one host, no AI calls.
+
+- `tracker/` — Bun + TypeScript loop: every 30 s it OCRs the credit ticker from
+  one cropped video frame; on song change it captures an 18 s burst and stitches
+  the marquee fragments into one canonical `Artist — Title` unit. A stitch it
+  is not sure of goes to the journal with its fragments, not onto the row. It
+  also stamps a heartbeat every tick and prunes at the Amsterdam day boundary.
+- `web/` — Astro + Tailwind, server-rendered on every request: `/` is the only
+  page. Times in Europe/Amsterdam, 12-hour with AM/PM (stored in UTC).
+- `shared/` — the two things both processes must agree on and nothing else: how
+  a credit splits into artist and title, and where the state directory is. Pure
+  functions and constants, no I/O.
+
+**Today only.** At Europe/Amsterdam midnight the tracker drops the previous day's
+plays, and there is nothing else to drop — a play references nothing outside its
+own array. Then it starts collecting again. There is no archive and no dated
+route — by design, not omission. The day boundary is Amsterdam regardless of
+where the server or the viewer is.
+
+## Requirements
+
+`bun`, `yt-dlp`, `ffmpeg`, `tesseract` on PATH. Both processes must run on the
+**same host**: they share one state directory, and the atomic-rename guarantee
+the state layer depends on is not reliable across a network filesystem.
+
+## Configuration
+
+`EARWITNESS_STATE` — the **directory** holding both state files, resolved by
+both processes. Default `~/.local/share/earwitness/`, deliberately outside the
+deployment directory so a redeploy cannot discard the current day. On a
+containerized host it must point at a mounted volume.
+
+Both processes must resolve the *same* directory; a divergent path is a silent
+split-brain where each is right about a different empty directory. The default
+therefore has exactly one definition, in `shared/`, and neither package keeps a
+copy of it.
+
+## Running it locally
+
+```bash
+bun install                                  # once, at the ROOT: it is a workspace
+cd tracker && bun run tracker.ts             # terminal 1
+cd web     && bun run dev                    # terminal 2 → localhost:4321
+```
+
+The root `package.json` declares the three packages as a workspace. Installing
+inside one of them instead is not a shortcut: `web/` imports `@earwitness/shared`,
+and without a workspace root Vite resolves `server.fs.allow` to `web/` alone and
+the dev server refuses to read the file.
+
+The tracker logs one line per event (play, anomaly, URL re-resolve, rollover).
+The page renders per request and meta-refreshes every 30 s, so new plays appear
+without interaction and without any client-side JavaScript.
+
+## Deploying it
+
+The repo carries no deployment config — supervise the two processes with
+whatever the host already runs. They must live on the **same host** and resolve
+the **same** `EARWITNESS_STATE` directory, on persistent storage and outside the
+checkout so a redeploy cannot discard the current day.
+
+```bash
+bun install                  # workspace root: all three packages
+cd web && bun run build      # web needs a build; it is SSR
+```
+
+Then `bun run tracker.ts` from `tracker/`, and `bun ./dist/server/entry.mjs`
+from `web/`. Running the built output under Bun keeps one toolchain across both,
+but nothing requires it: the data layer reads two plain files through `node:fs`
+and pulls in no native binding or runtime builtin, so `node
+./dist/server/entry.mjs` serves the same build identically.
+
+Two things a supervisor has to get right:
+
+- **PATH.** The tracker shells out to `yt-dlp`, `ffmpeg` and `tesseract`. A
+  service manager's default PATH typically omits `/usr/local/bin`, which is
+  where Bun and yt-dlp usually land.
+- **Restart backoff.** Give the tracker roughly 15 s between restarts — long
+  enough that a yt-dlp bot challenge or an off-air stream does not become a hot
+  restart loop, short enough to recover a crash within one tick.
+
+**Before provisioning, prove the stream resolves from that host:**
+
+```bash
+yt-dlp -g 'https://www.youtube.com/@claude/live'
+```
+
+YouTube commonly serves a bot challenge to datacenter IP ranges. A failure here
+is not a bug to fix later — it reopens the hosting choice (PO-token sidecar,
+residential proxy, or capturing from a residential host).
+
+## Design
+
+One responsive page, drawn at 1440, 834 and 390.
+
+The mark is *Pixel Note*, an eighth note on a 12×12 grid: 21 blocks, one
+geometry from the header down to the favicon, drawn in `currentColor` so it
+inherits the health tone — terracotta on air, grey off air, ochre in trouble.
+The palette is sampled off a live frame of the stream, so the page reads as a
+companion to what it tracks; both sampled accents are too light for small text,
+so each runs in two tiers and the `-text` suffix marks the one that may set
+type. Type is Roboto Mono, behind the platform monospace stack.
+
+The design system *is* Tailwind's theme: `web/src/styles/global.css` declares the
+palette, ten type steps, six tracking values and exactly two breakpoints (700px
+and 1100px, with the rest of the namespace cleared). Note that a class outside
+the theme — an `sm:` variant, a mistyped token — generates no CSS and sits inert
+rather than erroring, so changes are checked at the two real widths.
+
+Two states the page deliberately does not have:
+
+- **There is no "ticker unreadable" state.** A failure count is operator
+  telemetry a viewer cannot act on, so it maps onto the 15-minute silence state
+  — same ochre treatment, the silence reported instead of the count. It goes to
+  the journal.
+- **The log is never truncated.** With no archive and no client-side JavaScript,
+  a "172 earlier plays" label leads nowhere, so the day renders in full (~420
+  rows is 136 KB) and the total stays in the log header.
+
+## Health
+
+The tracker writes one byte to `live.flag` at the start of every tick: `1` when
+the last stream URL resolution succeeded, `0` when it failed. The file's mtime is
+the heartbeat — no timestamp is stored, because the filesystem already keeps one.
+
+The page derives what to say, first match winning. It says it in the hero, which
+is also where the current song goes — so good news and bad news land in the same
+place and a reader learns where to look once:
+
+| condition | kicker | headline |
+| --- | --- | --- |
+| `live.flag` absent | Starting up | Tuning in |
+| mtime over 3 minutes old | Tracker offline | Nothing heard since HH:MM AM |
+| content `0` | Off air | Nothing on the air |
+| newest play over 15 minutes old | Nothing coming through | Nothing new for N minutes |
+| newest play under 6 minutes old | On air · now playing | *the song's title* |
+| newest play 6–15 minutes old | On air · last logged | *the song's title* |
+| otherwise | Listening | No song logged yet |
+
+The hero is *above* the list, never instead of it — a stitching problem must not
+hide songs already captured. Only the two states with nothing captured to show,
+starting-up and listening, render no list at all.
+
+The six-minute line is the one claim the data has to earn: songs run 2–4 minutes
+and detection lags up to ~3, so past that the hero keeps its shape and stops
+saying "now". The list's `now` badge is computed from the same constant, so the
+two can never disagree.
+
+`presentation.ts` holds every one of those words and nothing else; `health.ts`
+holds the thresholds and the order. A copy edit must not touch the second file.
+
+The heartbeat is stamped at tick *start*, not completion: a burst tick can
+legitimately run for over a minute, and the 3-minute threshold clears that.
+
+Failure counts, retry streaks and error output are deliberately **not** on the
+page. A viewer cannot act on them, and the symptom they can see is the silence
+row above. They go to the journal, where the operator is.
+
+## Data
+
+Two plain files in `$EARWITNESS_STATE`. No database: with one day retained, every
+relational feature was unused — the index covered at most ~480 rows, the unique
+constraint was unreachable because dedup scans by edit distance first, and the
+foreign key existed only to order the prune. What SQLite did provide, atomic
+writes, is `writeState` in `tracker/src/state.ts`.
+
+```
+plays.json   ~50 KB   ~400 writes/day   temp file + rename
+live.flag    1 byte    ~2880 writes/day  content 0|1, mtime = heartbeat
+```
+
+```json
+{ "version": 2,
+  "plays": [{ "detectedAt": "2026-08-23T09:41:12.000Z",
+              "credit": "Ben Seretan — kokosing" }] }
+```
+
+`plays.json` holds the day's plays and nothing else. A play is the observation
+and only the observation: `detectedAt`, the clock at the moment the tracker
+*resolved* the song — it lags the song's actual start by up to a burst, which is
+what the six-minute "now" window absorbs — and `credit`, the stitched reading of
+the ticker. Artist and title are `parseUnit(credit)` and are derived by each
+reader at the point of use, so a parser fix improves the morning's rows on the
+next render instead of waiting for midnight. 113 B/play measured on 2026-08-23,
+about 50 KB at a full day's ~450 plays.
+
+Plays are appended chronologically, and that order is what the health state
+depends on — the newest play is the last element. The page renders them newest
+first. `credit` is what dedup compares against, and it is compared
+**rotation-invariantly**: the stitcher guesses where the marquee loop starts, so
+two bursts of one song can be cut at different points and Levenshtein alone once
+filed those as separate songs. On a match the play stores the credit of the entry
+it matched, never the incoming one — that is what keeps one song from appearing
+under two spellings, and with no track table left it is the only thing that does.
+A play carries no confidence field under any name, and a test in
+`tracker/test/state.test.ts` enforces that — the tracker's certainty about a
+stitch is in the journal, and nothing reads it back.
+Useful checks:
+
+```bash
+S=${EARWITNESS_STATE:-~/.local/share/earwitness}
+
+jq '.plays | length' "$S/plays.json"                 # plays so far today
+
+jq -r '.plays[-10:][] | "\(.detectedAt)  \(.credit)"' \
+  "$S/plays.json"                                    # last 10 plays
+
+cat "$S/live.flag"                                   # 1 = live, 0 = off air
+stat -c %y "$S/live.flag"                            # the heartbeat (mtime);
+                                                     # macOS: stat -f %Sm
+
+journalctl -u <tracker-unit> | grep anomaly         # the only forensic record
+                                                     # low_confidence_stitch =
+                                                     # an uncertain row
+```
+
+**One rule when touching the state layer:** `writeFileSync` to `plays.json`
+truncates before writing, so a crash mid-write destroys the day. Every write goes
+through `writeState` (temp file + rename in the same directory) and there must
+never be a second path.
+
+**The version contract.** Both processes assert `version === 2` — the exact
+value, not merely that it is a number. The two deploy from one checkout but run
+as two systemd units and restart independently, and this field is the only thing
+that notices when they disagree about the shape of the file between them.
+
+On a mismatch they diverge, deliberately. The tracker renames the file to
+`plays.json.v<n>.bak` in the same directory, logs the rename with both versions,
+and continues from empty state — the file is readable and merely old, and exiting
+would crash-loop a forward deploy until the next Amsterdam midnight. The web app
+renders no plays, which its existing contract shows as a normal health state
+rather than an error. A file that will not parse at all is a different case and
+is unchanged: the tracker reports it and exits, because it cannot tell a corrupt
+file from a whole day of plays.
+
+There is no migration and there will not be one. State lives at most 24 hours by
+design, so a format change costs whatever part of one Amsterdam day has
+accumulated when the new binary starts.
+
+## Field toolkit (verified 2026-07-30, re-confirmed 2026-08-22 — reuse, don't re-derive)
+
+All capture constants live in `tracker/src/config.ts`. Measured facts: crop
+`crop=520:70:1390:30` at 1080p; marquee scrolls ≈ 4 chars/s with a ~1–2 s hold
+at the unit start each loop; the ♪ glyph between loop repetitions OCRs as `C`,
+`¢¢`, `dd`, a plain space, or nothing; song transitions are instant text swaps
+(empty OCR = capture hiccup, not a transition).
+
+```bash
+# resolve the stream URL (the ~6 h embedded expiry is a lie: the media playlist
+# is a sliding window and dies after ~25-30 s — measured 2026-08-23)
+URL=$(yt-dlp -g 'https://www.youtube.com/@claude/live')
+
+# single tick by hand: one cropped frame + OCR
+ffmpeg -loglevel error -i "$URL" -frames:v 1 -vf "crop=520:70:1390:30" -y tick.png \
+  && tesseract tick.png stdout --psm 7
+
+# burst: one full marquee loop (stitcher input)
+ffmpeg -loglevel error -t 14 -i "$URL" -vf "crop=520:70:1390:30,fps=1" -y tick_%02d.png
+
+# fair A/B of any filter change: record once, apply filters to identical frames
+ffmpeg -loglevel error -t 12 -i "$URL" -c copy -y sample.ts
+
+# long watch (transitions, drift): 8 min @ 0.5 fps
+ffmpeg -loglevel error -t 480 -i "$URL" -vf "crop=520:70:1390:30,fps=1/2" -y t_%03d.png
+```
+
+**If the overlay ever moves or is redesigned**, grab a full frame and
+re-locate the ticker, then update `crop` in `tracker/src/config.ts`:
+
+```bash
+ffmpeg -loglevel error -i "$URL" -frames:v 1 -y frame.png
+```
+
+## Tests
+
+```bash
+bun test                 # all three packages, from the workspace root
+
+cd tracker && bun test   # stitcher, fingerprint, day boundary, prune, dedup,
+                         # canonical credit, atomic writes, version contract,
+                         # unreadable-state refusal
+cd shared  && bun test   # parse, and the guard against a second parser
+cd web     && bun test   # health thresholds and their ORDER, the hero's words,
+                         # the read side's three no-rows paths, the Amsterdam
+                         # day filter, and the guards keeping words out of
+                         # health.ts and the two day-boundary copies in step
+```
+
+Type checking is separate, and `bun run build` does not do it — Astro transpiles
+`.astro` components without checking them. The five components are covered only
+by:
+
+```bash
+cd web && bun run check  # astro check: components, pages, lib and tests
+```
+
+It is held at `typescript@^6`, and the major is the part that matters:
+TypeScript 7 is a native rewrite that does not yet expose the programmatic API
+`astro check` calls, so it fails outright rather than degrading quietly. The
+caret takes 6.x fixes and stops short of that. Track
+[withastro/roadmap#1321](https://github.com/withastro/roadmap/discussions/1321)
+before widening it.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+Earwitness is an independent project and is not affiliated with, endorsed by, or
+connected to Anthropic. It reads the public credit ticker on a public stream and
+records what it sees; it redistributes no audio or video. Track and artist names
+belong to their respective owners, and the MIT grant above covers this code
+only, not the material it names. The page carries the same disclaimer in its
+footer, where a reader will actually see it.
+
+Roboto Mono is Apache-2.0 and is loaded from Google Fonts rather than vendored,
+so no font files ship in this repository.

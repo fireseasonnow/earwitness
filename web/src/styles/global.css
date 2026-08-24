@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/**
+ * The design system is Tailwind's theme. These are the only visual
+ * literals in the app: nothing under `web/src/` hard-codes a colour or a size.
+ */
+@theme {
+  /* ---- Palette ------------------------------------------------------------
+   * Sampled from a live frame of the stream on 2026-08-22, so the page sits in
+   * visual sympathy with what it tracks.
+   *
+   * Both sampled accents fail small text on paper — terracotta 3.6:1, ochre
+   * 1.7:1 — so each runs in two tiers. The `-text` suffix is the whole
+   * enforcement mechanism: a token without it is a mark or a fill and must not
+   * set type. `--color-ochre` sets no text on paper at any size.
+   */
+  --color-paper: #f5f3ed; /* ground */
+  --color-ink: #2a2822; /* body, halftone         13.3:1 */
+
+  --color-terra: #bf684d; /* live · marks            3.6:1 */
+  --color-terra-text: #a5512f; /* live · text, chip fill  5.0:1 */
+  --color-terra-hover: #8f4526; /* link hover */
+
+  --color-ochre: #efb154; /* fills only              1.7:1 */
+  --color-ochre-text: #8a5f22; /* attention · text        5.1:1 */
+
+  --color-dormant: #6b665b; /* off air, starting up    5.2:1 */
+
+  --color-muted: #6c6863; /* secondary labels        5.1:1 */
+  --color-artist-ink: #5c574d; /* the hero's artist line */
+  --color-row-ink: #3f3b34; /* log rows not playing now */
+  --color-faint: #b8b3a8; /* the em-dash between artist and title */
+  --color-rule: #ddd8cd; /* hairlines */
+
+  /* ---- Type ---------------------------------------------------------------
+   * Ten steps, named so they do not collide with Tailwind's own scale — which
+   * is left defined but unused.
+   */
+  --text-micro: 9px; /* tagline */
+  --text-label: 10px; /* kicker, log label, chip, footer */
+  --text-note: 11px; /* brand, meta, the same at the md step */
+  --text-row: 12px; /* log rows, count, hero detail */
+  --text-lede: 13px; /* hero artist; log rows at md */
+  --text-lede-md: 14px;
+  --text-lede-lg: 15px;
+  --text-hero: 26px; /* hero title, and its two steps up */
+  --text-hero-md: 30px;
+  --text-hero-lg: 42px;
+
+  --tracking-title: -0.01em;
+  --tracking-meta: 0.05em;
+  --tracking-badge: 0.14em;
+  --tracking-tagline: 0.16em;
+  --tracking-label: 0.2em;
+  --tracking-brand: 0.24em;
+
+  /* Roboto Mono, behind the platform monospace stack — a webfont that never
+   * arrives costs the page its face and nothing else. */
+  --font-mono: "Roboto Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- Breakpoints --------------------------------------------------------
+   * There are exactly two. Clearing the namespace first leaves `md:` and `lg:`
+   * as the only ones that exist, so an unplanned width cannot be styled — note
+   * that an `sm:` class would generate no CSS and sit inert rather than raise
+   * an error, so the two real widths are checked directly.
+   */
+  --breakpoint-*: initial;
+  --breakpoint-md: 700px;
+  --breakpoint-lg: 1100px;
+}
+
+/**
+ * The halftone rule under the hero: the one value with no utility equivalent.
+ * Its vertical margins step with the breakpoints, so they stay on the markup
+ * rather than here.
+ */
+@utility dots {
+  height: 5px;
+  opacity: 0.3;
+  background-image: radial-gradient(var(--color-ink) 0.8px, transparent 0.9px);
+  background-size: 5px 5px;
+}

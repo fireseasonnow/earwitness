@@ -1,0 +1,68 @@
+---
+import Hero from "./Hero.astro";
+import Mark from "./Mark.astro";
+import PlayLog from "./PlayLog.astro";
+import { liveFlag, playsToday } from "../lib/state";
+import { deriveState } from "../lib/health";
+import { hero as heroFor, toneMark } from "../lib/presentation";
+import { todayDisplay } from "../lib/time";
+
+const plays = playsToday();
+const state = deriveState(liveFlag(), plays[plays.length - 1] ?? null);
+const hero = heroFor(state);
+---
+
+<div
+  class="mx-auto max-w-[680px] px-[20px] pt-[26px] pb-[36px] md:px-[28px] md:pt-[36px] md:pb-[42px] lg:max-w-[760px] lg:px-[32px] lg:pt-[44px] lg:pb-[46px]"
+>
+  {/* The page names itself and the station it logs. The footer denies any
+      relationship to that station's operator. */}
+  <header
+    class="mb-[26px] flex flex-col items-start gap-[9px] md:mb-[30px] md:flex-row md:items-center md:justify-between md:gap-[16px] lg:mb-[34px]"
+  >
+    <div class="flex items-center gap-[10px]">
+      {/* The mark inherits the health tone — grey off air, ochre in trouble. */}
+      <Mark class={toneMark[hero.tone]} />
+      <div class="flex flex-wrap items-baseline gap-[9px]">
+        <span class="text-note font-medium uppercase tracking-label md:text-row md:tracking-brand">
+          Earwitness
+        </span>
+        <span class="text-micro uppercase tracking-tagline text-muted md:text-label">
+          play log for Claude FM
+        </span>
+      </div>
+    </div>
+    <span class="text-note tracking-meta text-muted md:text-row">{todayDisplay()} · Amsterdam</span>
+  </header>
+
+  {/* Good news and bad news land in the same place, so the reader learns where
+      to look once. The log still renders beneath it either way. */}
+  <Hero hero={hero} />
+
+  <div class="dots mt-[24px] mb-[20px] md:mt-[28px] md:mb-[22px] lg:mt-[30px] lg:mb-[24px]"></div>
+
+  {
+    hero.showLog && (
+      <PlayLog plays={plays} nowPlaying={state.kind === "ok" && state.nowPlaying} />
+    )
+  }
+
+  {/* Rendered on every request and in every health state — never in place of
+      the play list. It names the stream and denies any relationship to its
+      operator in the same breath, which is why the two cannot be split. The
+      source link belongs here for the same reason: "independent project" is a
+      claim, and the repository is the only thing that lets a reader check it. */}
+  <footer
+    class="mt-[30px] border-t border-rule pt-[16px] text-label leading-[1.65] text-muted md:mt-[34px] md:pt-[18px] md:text-note"
+  >
+    Earwitness is an independent project, not affiliated with Anthropic. It reads the public
+    credit ticker on <a
+      href="https://www.youtube.com/@claude/live"
+      class="text-terra-text hover:text-terra-hover hover:underline">Claude FM</a
+    >, Anthropic's 24/7 stream, and logs what it hears. Track names belong to their
+    respective artists. Source on <a
+      href="https://github.com/fireseasonnow/earwitness"
+      class="text-terra-text hover:text-terra-hover hover:underline">GitHub</a
+    >, MIT licensed.
+  </footer>
+</div>

@@ -1,0 +1,38 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  /** Reload every 30 s (tracker tick cadence) so new plays appear live. */
+  autoRefresh?: boolean;
+}
+const { title, autoRefresh = false } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {autoRefresh && <meta http-equiv="refresh" content="30" />}
+    <title>{title}</title>
+
+    {/* The Pixel Note again — same 21 blocks as the header mark. */}
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    {/* Roboto Mono, Apache-2.0. The `--font-mono` token puts the
+        platform monospace stack behind it, so a blocked CDN costs the page its
+        face and nothing else: every size and tracking value still applies. */}
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap"
+    />
+
+    {/* The one literal colour outside the theme: a meta value cannot reference
+        a CSS custom property. It is `--color-paper`, and moves with it. */}
+    <meta name="theme-color" content="#f5f3ed" />
+  </head>
+  <body class="min-h-screen bg-paper font-mono text-ink antialiased">
+    <slot />
+  </body>
+</html>

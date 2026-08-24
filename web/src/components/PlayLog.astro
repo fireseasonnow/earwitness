@@ -1,0 +1,84 @@
+---
+import type { PlayView } from "../lib/state";
+import { amsTime } from "../lib/time";
+
+/**
+ * Today's plays, in full.
+ *
+ * The log is never truncated. With no archive, no dated route and no
+ * client-side JavaScript, an "N earlier plays" label leads nowhere, so the day
+ * renders complete and the count stays in the header. ~400 rows is a trivial
+ * page.
+ *
+ * There is no confidence marker on a row. The tracker's own certainty about a
+ * stitch is operator telemetry — a viewer cannot act on it or even tell what it
+ * means — so it is reported to the journal and stored nowhere, the same rule
+ * that keeps failure counts off the page.
+ *
+ * Newest first: on an always-on page that refreshes every 30 s, the row a
+ * reader wants is the one that just arrived, and appending to the bottom put it
+ * off-screen as the day filled up. The reversal happens HERE, on a copy — the
+ * data layer stays oldest-first because `DayView` reads the last element to
+ * derive the health state, and `<ol reversed>` keeps the numbering honest for
+ * anything reading the markup.
+ */
+interface Props {
+  plays: PlayView[];
+  /** Marks the newest row. Derived once with the hero's claim so the two
+      cannot disagree. */
+  nowPlaying: boolean;
+}
+const { plays, nowPlaying } = Astro.props;
+const rows = [...plays].reverse();
+---
+
+<div>
+  <div class="mb-[14px] flex items-baseline justify-between md:mb-[16px] lg:mb-[18px]">
+    <span class="text-label font-medium uppercase tracking-label text-muted md:text-note">
+      Played today
+    </span>
+    <span class="text-row tabular-nums text-muted">{plays.length}</span>
+  </div>
+
+  <ol reversed class="flex flex-col">
+    {
+      rows.map((p, i) => {
+        const live = nowPlaying && i === 0;
+        return (
+          <li
+            class="flex items-baseline gap-[14px] py-[5px] text-row leading-[1.45] md:gap-[18px] md:py-[6px] md:text-lede lg:gap-[20px]"
+          >
+            {/* Eight monospace characters ("09:41 AM") at 12px, 13px at md.
+                Sized off the type scale, not guessed — a narrower column wraps
+                the AM/PM onto a second line and the rows stop aligning. */}
+            <span class="w-[62px] shrink-0 tabular-nums text-muted md:w-[68px]">
+              {amsTime(p.detectedAt)}
+            </span>
+            <span class:list={[live ? "font-medium text-ink" : "text-row-ink"]}>
+              {
+                p.artist.length > 0 ? (
+                  <Fragment>
+                    {p.artist}
+                    <span class="text-faint"> — </span>
+                    {p.title}
+                  </Fragment>
+                ) : (
+                  p.title
+                )
+              }
+              {
+                live && (
+                  <span
+                    class="ml-[8px] rounded-[3px] bg-terra-text px-[6px] py-[2px] text-label font-medium uppercase tracking-badge whitespace-nowrap text-paper"
+                  >
+                    now
+                  </span>
+                )
+              }
+            </span>
+          </li>
+        );
+      })
+    }
+  </ol>
+</div>

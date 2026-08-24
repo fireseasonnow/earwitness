@@ -1,0 +1,17 @@
+{
+  "name": "earwitness-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "tracker": "bun run tracker.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@earwitness/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}

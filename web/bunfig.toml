@@ -1,0 +1,4 @@
+[install]
+# Supply-chain guard: only install versions published at least 3 days ago,
+# so a compromised release has time to be caught and unpublished.
+minimumReleaseAge = 259200

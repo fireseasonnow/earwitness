@@ -1,0 +1,6 @@
+[install]
+# Supply-chain guard: only install versions published at least 3 days ago,
+# so a compromised release has time to be caught and unpublished. Installs run
+# from the workspace root, so this is the copy that applies; the per-package
+# files keep a lone `bun install` inside one package honest.
+minimumReleaseAge = 259200
