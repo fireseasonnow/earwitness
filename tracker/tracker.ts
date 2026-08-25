@@ -24,7 +24,7 @@ import { isSameSong } from "./src/fingerprint";
 import { log } from "./src/log";
 import { normalize } from "./src/normalize";
 import { StreamUrl } from "./src/resolve";
-import { bestFragmentUnit, stitch } from "./src/stitch";
+import { stitch } from "./src/stitch";
 import { amsMidnightUtc, todayAms } from "./src/time";
 
 /**
@@ -206,27 +206,21 @@ async function tick(): Promise<void> {
   if (res.unit === null) {
     failedStitchStreak++;
     burstCooldownTicks = Math.min(6, 2 ** failedStitchStreak); // 2, 4, 6, 6…
-    if (failedStitchStreak === 1) {
-      // The fragments are the only evidence of WHY the stitcher failed, and
-      // nothing stores them now — so they go in the line.
-      log(
-        `anomaly low_confidence_stitch (${res.reason}) — keeping current song` +
-          ` fragments=${JSON.stringify(fragments)} tickText=${JSON.stringify(text)}`,
-      );
-    } else {
-      log(`stitch failed again (${res.reason}), streak ${failedStitchStreak} — backing off`);
-    }
-    if (failedStitchStreak === 2) {
-      // A song is playing that we repeatedly cannot stitch. Record it once
-      // from the best single fragment — never silently absent. The uncertainty
-      // is in the log line above, not on the row.
-      const fallback = bestFragmentUnit(fragments);
-      if (fallback !== null) {
-        const { credit, inserted } = recordPlay(CONFIG.stateDir, fallback, noisyBudget(fallback));
-        currentUnit = fallback; // what the marquee looks like NOW
-        if (inserted) log(playLine(credit, " [best-fragment fallback]"));
-      }
-    }
+    // The fragments are the only evidence of WHY the stitcher failed, and
+    // nothing stores them now — so they go in the line, on EVERY failure. The
+    // frame files are overwritten by the next burst and no row is written for
+    // an unstitchable song, so a streak that logged only its reason would
+    // leave a song unrecoverable the moment the stream's DVR window closes.
+    log(
+      `anomaly low_confidence_stitch (${res.reason}) streak ${failedStitchStreak}` +
+        ` — keeping current song fragments=${JSON.stringify(fragments)}` +
+        ` tickText=${JSON.stringify(text)}`,
+    );
+    // A repeatedly unstitchable song stays OFF the row. A single unvoted
+    // fragment is the weakest evidence the burst produced, at the moment the
+    // OCR is demonstrably worst — structure alone (one " — ", 3 chars a side)
+    // does not distinguish a credit from noise. The fragments are in the
+    // journal, where the operator is; the row stays silent rather than wrong.
     return;
   }
   failedStitchStreak = 0;

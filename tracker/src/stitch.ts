@@ -207,23 +207,6 @@ function sepLenBefore(doubled: string, idx: number): number {
   return n;
 }
 
-/**
- * Best single fragment usable as a fallback unit when stitching keeps
- * failing (pathological OCR): the longest fragment that parses as
- * `Artist — Title` with real content on both sides.
- */
-export function bestFragmentUnit(fragments: string[]): string | null {
-  const ok = fragments
-    .map((f) => f.trim())
-    .filter((f) => countOccurrences(f, " — ") === 1)
-    .filter((f) => {
-      const i = f.indexOf(" — ");
-      return i >= 3 && f.length - (i + 3) >= 3;
-    });
-  if (ok.length === 0) return null;
-  return ok.reduce((a, b) => (b.length > a.length ? b : a));
-}
-
 export function stitch(fragments: string[]): StitchResult {
   const frags = fragments
     .map((f) => f.replace(/[\r\n]+/g, " ").trimEnd())

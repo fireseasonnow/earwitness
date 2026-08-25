@@ -12,22 +12,17 @@ import { extname, join, relative } from "node:path";
  * of that divergence — the tracker and the page disagreeing about where an
  * artist ends — is one no unit test in either package would catch.
  *
- * So this is the test: neither source tree may cut a string on an em-dash.
- *
- * One use is allowed and named below. `stitch.ts` reasons about the em-dash
- * because the marquee's ♪ separator OCRs as one, and a fragment that does not
- * hold exactly one is not a usable unit. That is a shape check on the
- * stitcher's own input, not a derivation of artist and title, and `unit` stays
- * the term of art inside that module. It gets `indexOf` and
- * nothing else — a `split` there would be the reimplementation this guards.
+ * So this is the test: neither source tree may cut a string on an em-dash, and
+ * neither may locate one. `stitch.ts` once held the single allowed `indexOf`,
+ * for the fallback that turned one unvoted fragment into a row; that fallback
+ * is gone, and with it the exception. `countOccurrences(unit, " — ")` remains
+ * a shape check on the stitcher's own input and takes no position on where an
+ * artist ends.
  */
 
 const REPO = join(import.meta.dir, "..", "..");
 const ROOTS = ["tracker/src", "tracker/tracker.ts", "web/src"];
 const SCANNED = new Set([".ts", ".tsx", ".astro", ".mjs", ".js"]);
-
-/** The stitcher's fragment shape check — see the note above. */
-const ALLOWED_INDEXOF = join("tracker", "src", "stitch.ts");
 
 const emDashArg = String.raw`\s*\(\s*(["'\`][^"'\`\n]*—[^"'\`\n]*["'\`]|\/[^/\n]*—[^/\n]*\/)`;
 /** Cutting a string apart on an em-dash: the reimplementation itself. */
@@ -53,8 +48,8 @@ describe("the parse rule has exactly one implementation", () => {
     expect(FILES.filter((f) => CUTS_ON_EM_DASH.test(read(f)))).toEqual([]);
   });
 
-  test("only the stitcher's fragment check locates one, and web/src never does", () => {
-    expect(FILES.filter((f) => LOCATES_EM_DASH.test(read(f)))).toEqual([ALLOWED_INDEXOF]);
+  test("no source file outside shared/ even locates one", () => {
+    expect(FILES.filter((f) => LOCATES_EM_DASH.test(read(f)))).toEqual([]);
   });
 
   test("the scan reaches the files it claims to, and would catch a parser", () => {
