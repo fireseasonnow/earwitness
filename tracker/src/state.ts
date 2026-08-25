@@ -1,8 +1,10 @@
 /**
- * Persistent state: two plain files in one directory.
+ * Persistent state: three plain files in one directory.
  *
- *   plays.json   the day's plays, and nothing else
- *   live.flag    one byte; its mtime is the tracker's heartbeat
+ *   plays.json      the day's plays, and nothing else
+ *   live.flag       one byte; its mtime is the tracker's heartbeat
+ *   confirmed.flag  no content; its mtime is the last time the marquee was
+ *                   READ as still showing the newest logged play
  *
  * There is no database. After the health and anomaly tables were dropped, every
  * relational feature left was unused — the index covered at most ~480 rows a
@@ -25,6 +27,7 @@ import { editDistance, normalize } from "./normalize";
 export const STATE_VERSION = 2;
 const PLAYS_FILE = "plays.json";
 const FLAG_FILE = "live.flag";
+const CONFIRMED_FILE = "confirmed.flag";
 
 export interface Play {
   /**
@@ -62,6 +65,10 @@ export function playsPath(dir: string = CONFIG.stateDir): string {
 
 export function flagPath(dir: string = CONFIG.stateDir): string {
   return join(dir, FLAG_FILE);
+}
+
+export function confirmedPath(dir: string = CONFIG.stateDir): string {
+  return join(dir, CONFIRMED_FILE);
 }
 
 export function emptyState(): State {
@@ -285,6 +292,35 @@ export function pruneToDay(dir: string, dayStartUtc: Date): void {
 export function writeLiveFlag(dir: string, streamLive: boolean): void {
   ensureStateDir(dir);
   writeFileSync(flagPath(dir), streamLive ? "1" : "0");
+}
+
+/**
+ * Stamp the confirmation flag: the marquee was just read and still shows the
+ * song that is the newest row in `plays.json`.
+ *
+ * Like `live.flag`, the mtime IS the datum — the file holds no content, because
+ * the filesystem already keeps the only timestamp anyone needs. It is written
+ * from two places and they are the same claim: the cheap tick path, where the
+ * fingerprint matches the current unit (~85% of ticks, so this is usually
+ * seconds old), and a burst that records or re-confirms a play.
+ *
+ * What must NOT stamp it is a failed stitch. That is the whole point: the
+ * marquee has changed to something the tracker cannot read, and the page needs
+ * to stop claiming the last row is playing now. Absence of a stamp is the
+ * signal, so nothing may write it "just to be safe".
+ */
+export function writeConfirmedFlag(dir: string = CONFIG.stateDir): void {
+  ensureStateDir(dir);
+  writeFileSync(confirmedPath(dir), "");
+}
+
+/** mtime of the confirmation flag, or null when it has never been stamped. */
+export function readConfirmedAt(dir: string = CONFIG.stateDir): Date | null {
+  try {
+    return statSync(confirmedPath(dir)).mtime;
+  } catch {
+    return null;
+  }
 }
 
 export interface LiveFlag {

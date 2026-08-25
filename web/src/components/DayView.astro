@@ -2,13 +2,13 @@
 import Hero from "./Hero.astro";
 import Mark from "./Mark.astro";
 import PlayLog from "./PlayLog.astro";
-import { liveFlag, playsToday } from "../lib/state";
+import { confirmedAt, liveFlag, playsToday } from "../lib/state";
 import { deriveState } from "../lib/health";
 import { hero as heroFor, toneMark } from "../lib/presentation";
 import { todayDisplay } from "../lib/time";
 
 const plays = playsToday();
-const state = deriveState(liveFlag(), plays[plays.length - 1] ?? null);
+const state = deriveState(liveFlag(), plays[plays.length - 1] ?? null, confirmedAt());
 const hero = heroFor(state);
 ---
 

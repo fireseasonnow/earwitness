@@ -9,7 +9,7 @@ import type { LiveFlag, PlayView } from "../src/lib/state";
  *
  * Two things are under test and they are not the same thing:
  *
- *   the THRESHOLDS  3 / 15 / 6 minutes, each checked on both sides
+ *   the THRESHOLDS  3 / 15 / 3 / 10 minutes, each checked on both sides
  *   the ORDER       first match wins, and which match comes first
  *
  * The order is the part with no other guard. Nothing in the type system stops
@@ -35,7 +35,18 @@ function play(agoMs: number): PlayView {
   };
 }
 
-const at = (f: LiveFlag | null, p: PlayView | null) => deriveState(f, p, NOW);
+/** A confirmation stamped `agoMs` before NOW. */
+function confirmed(agoMs: number): Date {
+  return new Date(NOW.getTime() - agoMs);
+}
+
+/**
+ * The default is `null` — no confirmation on disk — because that is what an
+ * older tracker looks like and the fallback path must stay covered. Cases that
+ * are about confirmation pass it explicitly.
+ */
+const at = (f: LiveFlag | null, p: PlayView | null, c: Date | null = null) =>
+  deriveState(f, p, c, NOW);
 
 describe("deriveState — the six states", () => {
   test("no flag file yet is starting up", () => {
@@ -80,7 +91,7 @@ describe("deriveState — the six states", () => {
   });
 
   test("a play past the now window is still ok, no longer now playing", () => {
-    const state = at(flag(true, 10_000), play(9 * MIN));
+    const state = at(flag(true, 10_000), play(12 * MIN));
     expect(state.kind).toBe("ok");
     if (state.kind !== "ok") throw new Error("unreachable");
     expect(state.nowPlaying).toBe(false);
@@ -129,11 +140,40 @@ describe("deriveState — threshold boundaries", () => {
     expect(at(flag(true, 10_000), play(15 * MIN + 1)).kind).toBe("stalled");
   });
 
-  test("6 minutes is the edge of the now-playing claim", () => {
-    const justInside = at(flag(true, 10_000), play(6 * MIN - 1));
-    const justOutside = at(flag(true, 10_000), play(6 * MIN));
+  test("10 minutes is the edge of the now-playing claim WITHOUT confirmation", () => {
+    const justInside = at(flag(true, 10_000), play(10 * MIN - 1));
+    const justOutside = at(flag(true, 10_000), play(10 * MIN));
     expect(justInside.kind === "ok" && justInside.nowPlaying).toBe(true);
     expect(justOutside.kind === "ok" && justOutside.nowPlaying).toBe(false);
+  });
+
+  test("3 minutes is the edge of the confirmation, and it decides alone", () => {
+    const old = play(40 * MIN);
+    const justInside = at(flag(true, 10_000), old, confirmed(3 * MIN - 1));
+    const justOutside = at(flag(true, 10_000), old, confirmed(3 * MIN));
+    expect(justInside.kind === "ok" && justInside.nowPlaying).toBe(true);
+    expect(justOutside.kind === "ok" && justOutside.nowPlaying).toBe(false);
+  });
+
+  test("a stale confirmation overrides a play young enough for the fallback", () => {
+    // The song changed to something the stitcher cannot read: the row is two
+    // minutes old and would pass the age fallback, but nothing has confirmed
+    // the marquee since. Evidence beats the clock.
+    const state = at(flag(true, 10_000), play(2 * MIN), confirmed(5 * MIN));
+    expect(state.kind === "ok" && state.nowPlaying).toBe(false);
+  });
+
+  test("a fresh confirmation keeps a long track out of the stalled state", () => {
+    // 20 minutes past STALL_MS, but the tracker is reading the marquee every
+    // tick and it still shows this row. A long track is not a fault.
+    const state = at(flag(true, 10_000), play(20 * MIN), confirmed(20_000));
+    expect(state.kind).toBe("ok");
+    expect(state.kind === "ok" && state.nowPlaying).toBe(true);
+  });
+
+  test("the 28-minute stall is still caught: it confirms nothing", () => {
+    const state = at(flag(true, 10_000), play(28 * MIN), confirmed(28 * MIN));
+    expect(state.kind).toBe("stalled");
   });
 
   test("silenceMinutes floors rather than rounds", () => {
@@ -188,7 +228,7 @@ describe("deriveState — tickerReadSecondsAgo", () => {
     // Clock skew between the tracker's write and the web process's read must
     // not surface as "ticker read -3 seconds ago".
     const ahead: LiveFlag = { streamLive: true, updatedAt: new Date(NOW.getTime() + 4000) };
-    const state = deriveState(ahead, play(1 * MIN), NOW);
+    const state = deriveState(ahead, play(1 * MIN), null, NOW);
     expect(state.kind === "ok" && state.tickerReadSecondsAgo).toBe(0);
   });
 });
@@ -204,6 +244,6 @@ describe("deriveState — the clock is injected, not read", () => {
       artist: "Ben Seretan",
       title: "kokosing",
     };
-    expect(deriveState(shifted, shiftedPlay, later).kind).toBe("ok");
+    expect(deriveState(shifted, shiftedPlay, null, later).kind).toBe("ok");
   });
 });

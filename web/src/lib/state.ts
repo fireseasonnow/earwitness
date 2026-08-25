@@ -6,7 +6,7 @@ import { todayRangeUtc } from "./time";
 /**
  * Read-only view of the tracker's state directory.
  *
- * Two plain files, read through `node:fs`. No database driver, no native
+ * Three plain files, read through `node:fs`. No database driver, no native
  * binding, no runtime builtin — which is why the built server is no longer
  * pinned to a particular runtime.
  */
@@ -34,6 +34,7 @@ const stateDir = resolveStateDir();
 
 const playsFile = join(stateDir, "plays.json");
 const flagFile = join(stateDir, "live.flag");
+const confirmedFile = join(stateDir, "confirmed.flag");
 
 interface RawPlay {
   detectedAt: string;
@@ -93,6 +94,28 @@ export function liveFlag(): LiveFlag | null {
   try {
     const { mtime } = statSync(flagFile);
     return { streamLive: readFileSync(flagFile, "utf8").trim() === "1", updatedAt: mtime };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * When the tracker last READ the marquee as still showing the newest logged
+ * play, or null when it never has.
+ *
+ * Null is not an error state and must not be treated as one: it is what a
+ * tracker older than this file looks like, and what the first seconds of a
+ * fresh state directory look like. `deriveState` falls back to the play's age
+ * in that case, so the page degrades to its previous behaviour rather than to
+ * a wrong one.
+ *
+ * The file has no content — the mtime is the whole of it, exactly as with
+ * `live.flag`, because the filesystem already stores a timestamp and a second
+ * copy inside the file could disagree with it.
+ */
+export function confirmedAt(): Date | null {
+  try {
+    return statSync(confirmedFile).mtime;
   } catch {
     return null;
   }

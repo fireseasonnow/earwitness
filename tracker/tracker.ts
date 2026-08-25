@@ -18,6 +18,7 @@ import {
   pruneToDay,
   readState,
   recordPlay,
+  writeConfirmedFlag,
   writeLiveFlag,
 } from "./src/state";
 import { isSameSong } from "./src/fingerprint";
@@ -179,6 +180,10 @@ async function tick(): Promise<void> {
   if (currentUnit !== null && isSameSong(text, currentUnit, CONFIG.fuzzyMaxEdits)) {
     failedStitchStreak = 0;
     burstCooldownTicks = 0;
+    // The marquee still reads as the song holding the newest row. This is the
+    // ~85% path, so the page's claim that something is playing NOW rests on
+    // evidence at most one tick old rather than on a guess about song length.
+    writeConfirmedFlag(CONFIG.stateDir);
     return; // the ~85% path: same song, sleep
   }
 
@@ -231,6 +236,9 @@ async function tick(): Promise<void> {
   const dedupBudget = res.confident ? CONFIG.creditDedupMaxEdits : noisyBudget(res.unit);
   const { credit, isNew, inserted } = recordPlay(CONFIG.stateDir, res.unit, dedupBudget);
   currentUnit = res.unit; // what the marquee looks like NOW
+  // A stitch that resolved is a reading of the marquee, whether or not it
+  // produced a row: either way the newest row is the song now playing.
+  writeConfirmedFlag(CONFIG.stateDir);
   if (!inserted) {
     log("burst re-confirmed current song (no new play)");
     return;

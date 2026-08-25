@@ -13,7 +13,18 @@ export const CONFIG = {
   // Must cover one full marquee loop INCLUDING the ~1-2 s hold at the unit
   // start: loop ≈ unitLen/4 + pause. Live units reach ~55 chars → 18 s.
   burstSeconds: 18,
-  burstFps: 1,
+  /**
+   * Two frames a second, not one.
+   *
+   * At 1 fps an 18 s burst covers an ~11 s marquee loop less than twice, and
+   * `no_repeat_period` — the stitcher failing to find the loop at all — was the
+   * dominant failure on 2026-08-25: six in a session, on songs whose fragments
+   * were plainly readable ("Seretan — criss cross applesauce"). Period
+   * detection needs samples, not legibility, and this doubles them without
+   * lengthening the burst. The cost is 36 tesseract calls per burst instead of
+   * 18, on the ~15% burst path only.
+   */
+  burstFps: 2,
 
   // `yt-dlp -g` returns a media-playlist URL, not a durable stream URL: it is a
   // snapshot of a sliding window of 2 s segments and stops working after ~25-30 s

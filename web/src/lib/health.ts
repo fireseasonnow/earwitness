@@ -31,9 +31,16 @@ const STALE_MS = 3 * 60 * 1000;
  * A heartbeat only proves the loop is turning, not that it is getting anywhere.
  * The tracker once ticked healthily for 28 minutes without logging a play — a
  * stale-URL stall that reset the failure streak on every retry, so nothing
- * downstream could see it. Silence this long is itself a symptom: tracks
- * run 2-4 minutes, and a song the stitcher cannot read is still recorded from
- * its best fragment, so nothing legitimately produces a gap this size.
+ * downstream could see it.
+ *
+ * Silence this long used to be conclusive, on the reasoning that tracks run 2-4
+ * minutes and an unreadable song was still recorded from its best fragment. That
+ * fallback is gone — it promoted a single unvoted OCR frame to a row, and put
+ * "ape suspended PADELM — Clot" on the page — so a run of failed stitches can
+ * now produce a legitimate gap of any length. The confirmation flag is what
+ * distinguishes the two: a stalled tracker stops confirming, while a long track
+ * goes on being confirmed every tick. Hence the guard below, not a longer
+ * threshold — the 28-minute stall confirmed nothing, and would still be caught.
  *
  * This used to be the *last* warning in a chain that began with a failure count
  * (the old `degraded` state). It is now the only one — that count was operator
@@ -45,19 +52,53 @@ const STALE_MS = 3 * 60 * 1000;
 const STALL_MS = 15 * 60 * 1000;
 
 /**
- * The freshest play is almost certainly what's on the stream right now
- * (songs run ~2-4 min; detection lags <= ~1 min, worst case ~3).
+ * How stale the tracker's confirmation may be before the page stops claiming
+ * anything is playing NOW.
+ *
+ * The tracker stamps `confirmed.flag` on every tick whose fingerprint still
+ * matches the current song — the ~85% path — so during a normal song this is
+ * seconds old, however long the song runs. It stops the moment the marquee
+ * changes to something the stitcher cannot read, which is precisely when the
+ * newest row stops being what is playing.
+ *
+ * Three minutes for the same reason `STALE_MS` is three: a burst tick can run
+ * over a minute, and the flag is stamped around it, not during it.
+ */
+const CONFIRM_WINDOW_MS = 3 * 60 * 1000;
+
+/**
+ * Fallback when the tracker has never stamped a confirmation — an older
+ * tracker, or the first seconds of a fresh state directory. Then the only
+ * evidence is the play's own age.
+ *
+ * Ten minutes, not the six this used to be. Six came from "songs run 2-4 min,
+ * detection lags <= ~3", but observed gaps between detections reach 7 minutes
+ * with the song demonstrably still on the marquee, so six declared a playing
+ * song stale. This path is now the exception rather than the rule, and it errs
+ * towards the claim the confirmation flag would have supported.
  *
  * One constant, two consumers: the hero's claim that something is playing now
  * and the list's "now" badge. They are computed once here so they cannot
  * disagree.
  */
-const NOW_WINDOW_MS = 6 * 60 * 1000;
+const NOW_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Is the newest play what the stream is playing right now?
+ *
+ * Confirmation wins whenever it exists, because it is a reading of the marquee
+ * rather than an inference from a clock.
+ */
+function isNowPlaying(newestPlay: PlayView, confirmedAt: Date | null, now: Date): boolean {
+  if (confirmedAt !== null) return now.getTime() - confirmedAt.getTime() < CONFIRM_WINDOW_MS;
+  return now.getTime() - Date.parse(newestPlay.detectedAt) < NOW_WINDOW_MS;
+}
 
 /** First match wins. The order below is the point. */
 export function deriveState(
   flag: LiveFlag | null,
   newestPlay: PlayView | null,
+  confirmedAt: Date | null = null,
   now: Date = new Date(),
 ): DisplayState {
   if (flag === null) return { kind: "starting_up" };
@@ -68,18 +109,24 @@ export function deriveState(
   }
   if (!flag.streamLive) return { kind: "off_air", lastPlayAt: newestPlay?.detectedAt ?? null };
   // After the off-air check: a named cause is more use than "nothing new".
-  if (newestPlay !== null && now.getTime() - Date.parse(newestPlay.detectedAt) > STALL_MS) {
+  // Fresh confirmation vetoes it: the tracker is reading the marquee and it
+  // still shows the newest row, so the silence is a long track, not a fault.
+  const nowPlaying = newestPlay !== null && isNowPlaying(newestPlay, confirmedAt, now);
+  if (
+    newestPlay !== null &&
+    !nowPlaying &&
+    now.getTime() - Date.parse(newestPlay.detectedAt) > STALL_MS
+  ) {
     return {
       kind: "stalled",
       silenceMinutes: Math.floor((now.getTime() - Date.parse(newestPlay.detectedAt)) / 60_000),
     };
   }
   if (newestPlay !== null) {
-    const age = now.getTime() - Date.parse(newestPlay.detectedAt);
     return {
       kind: "ok",
       play: newestPlay,
-      nowPlaying: age < NOW_WINDOW_MS,
+      nowPlaying,
       tickerReadSecondsAgo: Math.max(0, Math.floor((now.getTime() - flag.updatedAt.getTime()) / 1000)),
     };
   }
