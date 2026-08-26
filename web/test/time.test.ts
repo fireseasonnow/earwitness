@@ -4,18 +4,12 @@ import { amsMidnightUtc } from "../../tracker/src/time";
 
 /**
  * The Amsterdam day boundary is implemented TWICE — here and in
- * `tracker/src/time.ts` — and the duplication is deliberate: two packages, no
- * shared module, ~20 lines of `Intl` arithmetic each. The tracker's copy has
- * had DST tests since it was written. This one had none, which is the more
- * dangerous half of the pair to leave uncovered: the tracker merely prunes on
- * the boundary, while this decides which rows a reader sees.
+ * `tracker/src/time.ts` — deliberately: two packages, no shared module. The
+ * last block is what guards the duplication: same instant from both, across a
+ * full year.
  *
- * `amsMidnightUtc` is private here (the tracker exports its own), so the solver
- * is driven through `todayRangeUtc` with the clock moved instead — no export
- * added to production code just to be testable.
- *
- * The last block is the one that guards the duplication itself: same date, same
- * instant, from both implementations, across a full year.
+ * `amsMidnightUtc` is private here, so the solver is driven through
+ * `todayRangeUtc` with the clock moved rather than exported to be testable.
  */
 
 /** Amsterdam noon on `date` — safely inside the day whatever the offset. */

@@ -62,13 +62,10 @@ describe("isSameSong edge cases", () => {
 });
 
 describe("burstStillShows — confirming from a burst the stitcher rejected", () => {
-  // fixture 5 is a real no_repeat_period failure: the stitcher could not find
-  // the loop, while the frames plainly read "Owen Kelley — Tonkotsu
-  // (Reloaded)". Before this, four minutes of that song showed no "now playing"
-  // on the page even though the tracker was reading it on every burst.
   const currentUnit = "Owen Kelley — Tonkotsu (Reloaded)";
 
   test("the tail of the unstitchable burst confirms the current song", async () => {
+    // 12 of these 59 real frames match inside the tick budget, the last by one edit.
     const frags = await loadFixture("fixture5-unstitchable-burst.txt");
     expect(burstStillShows(frags, currentUnit, 20)).toBe(true);
   });
@@ -78,15 +75,11 @@ describe("burstStillShows — confirming from a burst the stitcher rejected", ()
     expect(burstStillShows(frags, currentUnit, 20)).toBe(false);
   });
 
-  // The reason the window is a tail and not the whole burst: fixture 3 crosses
-  // a song change at frame 9, so the old song is still in the early frames of a
-  // burst whose marquee has already moved on. Confirming from those would hold
-  // "now playing" on a song that has ended.
-  test("frames before a transition cannot confirm the song that ended", async () => {
+  test("frames before fixture 3's transition at frame 9 cannot confirm the song that ended", async () => {
     const lines = await loadFixture("fixture3-transition.txt");
     const oldUnit = "Orions Belte — Manual Shear";
-    expect(burstStillShows(lines, oldUnit, lines.length)).toBe(true); // whole burst
-    expect(burstStillShows(lines, oldUnit, lines.length - 8)).toBe(false); // tail only
+    expect(burstStillShows(lines, oldUnit, lines.length)).toBe(true);
+    expect(burstStillShows(lines, oldUnit, lines.length - 8)).toBe(false);
   });
 
   test("a tail longer than the burst is the burst, not an error", async () => {

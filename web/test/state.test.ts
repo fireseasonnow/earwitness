@@ -4,23 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 /**
- * The page's read side. It takes the opposite position to the tracker on the
- * same two files: the tracker refuses to start rather than write over something
- * it cannot read, and this degrades to a health state rather than throw —
- * because the page renders per request and the next one retries, while a write
- * would be destroying the day.
- *
- * So the three ways to end up with no rows are all NORMAL here, and that is the
- * contract under test:
- *
- *   file absent        the tracker has not written yet
- *   file unparseable   a torn or hand-edited file
- *   version mismatch   the other unit deployed first
+ * The page's read side degrades to a health state where the tracker refuses to
+ * start: it renders per request and the next one retries, while a write would
+ * be destroying the day. All three ways to end up with no rows are normal.
  *
  * `state.ts` resolves its directory once at module scope, so EARWITNESS_STATE
- * has to be set before the first import — hence the dynamic import below rather
- * than a top-level one. One directory for the whole file; the tests vary its
- * contents, not its path.
+ * has to be set before the first import — hence the dynamic import below.
  */
 
 const DIR = mkdtempSync(join(tmpdir(), "earwitness-web-test-"));

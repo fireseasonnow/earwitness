@@ -3,19 +3,14 @@ import { deriveState, type DisplayState } from "../src/lib/health";
 import type { LiveFlag, PlayView } from "../src/lib/state";
 
 /**
- * `deriveState` is the whole of what the page decides. It is pure — the clock
- * comes in as the third argument precisely so this file can exist — so every
- * state and every boundary is reachable without a filesystem or a fake timer.
- *
  * Two things are under test and they are not the same thing:
  *
  *   the THRESHOLDS  3 / 15 / 3 / 10 minutes, each checked on both sides
  *   the ORDER       first match wins, and which match comes first
  *
- * The order is the part with no other guard. Nothing in the type system stops
- * someone moving the off-air check above the staleness check during a refactor,
- * and every threshold test would still pass while a dead tracker started
- * reporting itself as merely off air.
+ * The order is the part with no other guard: moving the off-air check above the
+ * staleness check would leave every threshold test passing while a dead tracker
+ * reported itself as merely off air.
  */
 
 const NOW = new Date("2026-08-23T12:00:00.000Z");
@@ -235,8 +230,6 @@ describe("deriveState — tickerReadSecondsAgo", () => {
 
 describe("deriveState — the clock is injected, not read", () => {
   test("the same inputs give the same state at a different wall time", () => {
-    // No hidden `new Date()` inside: every state above is reproducible, which
-    // is what makes these tests deterministic rather than flaky at midnight.
     const later = new Date(NOW.getTime() + 90 * MIN);
     const shifted: LiveFlag = { streamLive: true, updatedAt: new Date(later.getTime() - 10_000) };
     const shiftedPlay: PlayView = {

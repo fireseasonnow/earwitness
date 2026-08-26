@@ -6,10 +6,8 @@ import { hero, toneMark, toneText, type Tone } from "../src/lib/presentation";
 import type { PlayView } from "../src/lib/state";
 
 /**
- * `hero` is a pure function of the state it is handed: no clock, no
- * environment, no filesystem. Every state is therefore constructed directly
- * here rather than arrived at through `deriveState`, which is the point of the
- * split — a copy edit changes this file's expectations and nothing else.
+ * States are constructed directly rather than arrived at through `deriveState`:
+ * a copy edit changes this file's expectations and nothing else.
  */
 
 const PLAY: PlayView = {
@@ -68,8 +66,6 @@ describe("hero — the on-air states", () => {
   });
 
   test("outside it, the hero keeps its shape and drops the claim", () => {
-    // Same four slots, same tone, same log — only the tense changes. This is
-    // the one claim the data has to earn.
     const now = hero({ kind: "ok", play: PLAY, nowPlaying: true, tickerReadSecondsAgo: 12 });
     const past = hero({ kind: "ok", play: PLAY, nowPlaying: false, tickerReadSecondsAgo: 12 });
     expect(past.kicker).toBe("On air · last logged");
@@ -178,12 +174,9 @@ describe("tone tiers", () => {
 });
 
 /**
- * The split is the design: `presentation.ts` holds every word, `health.ts`
- * holds every threshold and the order. Asserting that each module behaves is
- * not enough — the risk is that the next edit puts a string in the thresholds
- * file or a duration in the words file, and both modules would still pass every
- * test above while the README's promise ("a copy edit must not touch the second
- * file") quietly stopped being true.
+ * Both modules can pass every test above while a string migrates into the
+ * thresholds file or a duration into the words file, so the split is asserted
+ * against the sources themselves.
  */
 describe("words and thresholds stay in separate modules", () => {
   const WEB = join(import.meta.dir, "..", "src", "lib");

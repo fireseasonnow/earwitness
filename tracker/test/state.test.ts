@@ -63,9 +63,7 @@ describe("consecutive duplicate suppression", () => {
     expect(credits()).toEqual([ORIONS, FIELDS, ORIONS]);
   });
 
-  test("fallback path then a confident stitch of the same song: one play", () => {
-    // The best-fragment fallback records a play from raw OCR; the next
-    // confident stitch resolves to the same credit and must not add a second.
+  test("a partial reading then a confident stitch of the same song: one play", () => {
     const fragment = "Orions Belte — Manual Shea";
     const fallback = recordPlay(dir, fragment, 5);
     expect(fallback.inserted).toBe(true);
@@ -113,12 +111,9 @@ describe("consecutive duplicate suppression", () => {
 });
 
 describe("canonical credit", () => {
-  /*
-   * The invariant that lost its structural guarantee when the track table went:
-   * every play of one song must carry ONE spelling, or the page shows two songs
-   * where there is one. Nothing in the shape enforces it, and a violation looks
-   * exactly like correct output, so it is tested directly.
-   */
+  // Every play of one song must carry ONE spelling or the page shows two songs
+  // where there is one. Nothing in the shape enforces it since the track table
+  // went, and a violation looks exactly like correct output.
   const SERETAN = "Ben Seretan — walls are humming";
   const JITTERED = "Ben Seretan — walls are humrning"; // 2 edits
 
@@ -191,9 +186,6 @@ describe("pruneToDay", () => {
   });
 
   test("nothing outside the play array is left orphaned", () => {
-    // One filter, one array. The state after a prune that drops
-    // everything is byte-identical to a fresh one — there is no second
-    // collection that could survive its last reference.
     seed("gone", "2026-08-21T20:00:00.000Z");
     pruneToDay(dir, amsMidnightUtc("2026-08-22"));
     expect(readState(dir)).toEqual(emptyState());
@@ -268,7 +260,6 @@ describe("the written record carries only what was observed", () => {
   });
 
   test("no review, confidence or quality field is written under any name", () => {
-    // The tracker knows more than it stores, and that is the point.
     recordPlay(dir, "no separator here", 2); // the most "flaggable" input there is
     const text = readFileSync(playsPath(dir), "utf8");
     for (const banned of ["review", "confiden", "quality", "flag", "needs_"]) {

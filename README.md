@@ -11,10 +11,11 @@ Unofficial, and not affiliated with Anthropic.
 Two supervised processes on one host, no AI calls.
 
 - `tracker/` — Bun + TypeScript loop: every 30 s it OCRs the credit ticker from
-  one cropped video frame; on song change it captures an 18 s burst and stitches
-  the marquee fragments into one canonical `Artist — Title` unit. A stitch it
-  is not sure of goes to the journal with its fragments, not onto the row. It
-  also stamps a heartbeat every tick and prunes at the Amsterdam day boundary.
+  one cropped video frame; on song change it captures a 30 s burst at 2 fps and
+  stitches the ~60 marquee fragments into one canonical `Artist — Title` unit. A
+  stitch it is not sure of goes to the journal with its fragments, not onto the
+  row. It also stamps a heartbeat every tick, records that the marquee still
+  reads as the song already logged, and prunes at the Amsterdam day boundary.
 - `web/` — Astro + Tailwind, server-rendered on every request: `/` is the only
   page. Times in Europe/Amsterdam, 12-hour with AM/PM (stored in UTC).
 - `shared/` — the two things both processes must agree on and nothing else: how
@@ -29,13 +30,16 @@ where the server or the viewer is.
 
 ## Requirements
 
-`bun`, `yt-dlp`, `ffmpeg`, `tesseract` on PATH. Both processes must run on the
+`bun`, `yt-dlp`, `ffmpeg`, `tesseract` on PATH, plus `deno` for `yt-dlp`:
+YouTube extraction without a JavaScript runtime is deprecated, and this tracker
+re-resolves the stream URL on every tick. Any runtime yt-dlp supports will do;
+deno is the one it looks for by default. Both processes must run on the
 **same host**: they share one state directory, and the atomic-rename guarantee
 the state layer depends on is not reliable across a network filesystem.
 
 ## Configuration
 
-`EARWITNESS_STATE` — the **directory** holding both state files, resolved by
+`EARWITNESS_STATE` — the **directory** holding the three state files, resolved by
 both processes. Default `~/.local/share/earwitness/`, deliberately outside the
 deployment directory so a redeploy cannot discard the current day. On a
 containerized host it must point at a mounted volume.
@@ -76,7 +80,7 @@ cd web && bun run build      # web needs a build; it is SSR
 
 Then `bun run tracker.ts` from `tracker/`, and `bun ./dist/server/entry.mjs`
 from `web/`. Running the built output under Bun keeps one toolchain across both,
-but nothing requires it: the data layer reads two plain files through `node:fs`
+but nothing requires it: the data layer reads three plain files through `node:fs`
 and pulls in no native binding or runtime builtin, so `node
 ./dist/server/entry.mjs` serves the same build identically.
 
@@ -129,6 +133,75 @@ Two states the page deliberately does not have:
   a "172 earlier plays" label leads nowhere, so the day renders in full (a full
   day's ~450 rows is ≈150 KB) and the total stays in the log header.
 
+## Reading the ticker
+
+The marquee scrolls one credit on a loop, so no single frame holds the whole
+thing. A burst is 30 s at 2 fps and the stitcher recovers the credit from it:
+align the fragments on a shared column axis by best overlap, vote per column,
+detect the loop's repeat period, fold the votes modulo that period, then rotate
+the cyclic result to the loop boundary.
+
+Two details are worth knowing before touching any of it, both paid for on
+2026-08-26: of that day’s 62 failed bursts, 44 died at period detection with a
+readable consensus already in hand, and replaying them against the bounds below
+recovered 24.
+
+- **The period bounds are the credit's own length.** `MIN_PERIOD` and
+  `MAX_PERIOD` in `stitch.ts` bracket how long a credit may be, and both were
+  measured too narrow: `Grabek — three` loops every 15 columns and
+  `Ben Seretan — criss cross applesauce right in the stream of the amp` every
+  ~70. A credit outside the bracket is not found at all, or is found at a
+  multiple of its period. They now run 12–96, and `burstSeconds` has to keep
+  covering two loops of the longest — see the note on it in `config.ts`.
+- **A fold can come out holding whole copies of the credit.** One copy is then
+  the unit, and `collapseRepeats` keeps it; the test is rotation, not a split
+  down the middle, because the ♪ separator OCRs at a different width in each
+  repetition (`Passport — Reunion` folds as 19 + 21 columns). What must never
+  reach the row is the other case — copies that merely resemble each other,
+  which is a fold that smeared two readings together and parses perfectly well
+  as a credit. `validUnit` refuses anything that still repeats.
+
+Alignment runs twice. The first pass scores each fragment against whatever was
+placed before it, so the early ones are judged by a nearly empty tally; the
+second scores every fragment against the finished consensus of the first, and is
+kept only when it places more of them.
+
+A burst that will not stitch at all is retried on each half, the later one
+first — the tracker bursts because the marquee changed, so a burst that straddles
+the change holds two credits and nothing explains all of it. A half is weaker
+evidence and has to be cleaner: one that could not align a third of its frames
+is refused, which is what keeps a fold that came out a period short off the row.
+Every result from this path is low-confidence and carries `burst_split` into the
+journal.
+
+
+Of the 62 bursts that failed on 2026-08-26, this all recovers 30. The rest place
+too few frames to span two loops of the marquee — their consensus is usually
+readable, which is the standing hint that the next gain is in the OCR (the crop
+goes to tesseract unprocessed, over a dotted background) rather than in here.
+
+**When it bursts again after a failure.** A song whose OCR is pathological would
+otherwise burst on every tick, so a failed stitch buys a backoff of 2, 4 then 6
+ticks. That backoff is owed by one SONG, not by the clock: it holds only while
+the marquee still reads as the burst that earned it, and any other text on screen
+clears it and bursts immediately. The distinction is the whole point. A blanket
+backoff cannot be cleared by the cheap same-song path — that path only recognises
+the song already on the row — so a change arriving mid-cooldown left the tracker
+blind for one to three minutes, which at ~3 min a song is a whole play lost per
+failure, and the next burst then landed mid-transition and failed in turn. On
+2026-08-26 that cascade dropped 58 of 233 changes, 32 of them at streak 2 or
+worse, and held the tracker blind for 122 minutes of the day.
+
+`marqueeStillReads` makes the distinction against the failed burst's own frames
+rather than a unit, because a failed stitch has no unit. Two ticks of one song
+30 s apart can share almost nothing — the marquee loops several times in
+between — but a 30 s burst at 2 fps holds every phase of the loop, so whatever
+phase the tick caught, some frame of that burst saw it too. The budget is a
+ratio, and the two errors it can make are not equal: re-bursting a song it could
+have skipped costs CPU on the burst path, while mistaking a new song for the old
+one costs the play. Measured that day, same-song frames score 0.11-0.26 at the
+median and cross-song frames never below 0.43; the default sits at 0.40.
+
 ## Health
 
 The tracker writes one byte to `live.flag` at the start of every tick: `1` when
@@ -144,19 +217,39 @@ place and a reader learns where to look once:
 | `live.flag` absent | Starting up | Tuning in |
 | mtime over 3 minutes old | Tracker offline | Nothing heard since HH:MM AM |
 | content `0` | Off air | Nothing on the air |
-| newest play over 15 minutes old | Nothing coming through | Nothing new for N minutes |
-| newest play under 6 minutes old | On air · now playing | *the song's title* |
-| newest play 6–15 minutes old | On air · last logged | *the song's title* |
+| unconfirmed, newest play over 15 minutes old | Nothing coming through | Nothing new for N minutes |
+| confirmed under 3 minutes ago | On air · now playing | *the song's title* |
+| confirmed longer ago than that | On air · last logged | *the song's title* |
 | otherwise | Listening | No song logged yet |
 
 The hero is *above* the list, never instead of it — a stitching problem must not
 hide songs already captured. Only the two states with nothing captured to show,
 starting-up and listening, render no list at all.
 
-The six-minute line is the one claim the data has to earn: songs run 2–4 minutes
-and detection lags up to ~3, so past that the hero keeps its shape and stops
-saying "now". The list's `now` badge is computed from the same constant, so the
-two can never disagree.
+"Now playing" is the one claim the data has to earn, and it is earned by
+`confirmed.flag` rather than inferred from a clock. The tracker stamps it on
+every tick whose fingerprint still matches the current song — the ~85% path — so
+a track of any length keeps the claim while it is genuinely on the marquee, and
+loses it within one tick of changing to something the stitcher cannot read. That
+is the case an age window got wrong in both directions: a 7-minute gap with the
+song demonstrably still playing was called stale, while a failed stitch left the
+page asserting a row that had stopped being true.
+
+A burst that fails to stitch stamps it too, but only when the burst's last ten
+seconds still fingerprint-match the song already on the row. An unreadable
+marquee and an unstitchable one are not the same thing: the frames of a
+`no_repeat_period` failure routinely show the song plainly, and withholding
+confirmation there told the page a lie in the other direction. Nothing else may
+stamp the flag — absence of a stamp is the signal.
+
+Fresh confirmation also vetoes the 15-minute silence state, because a long track
+and a stalled tracker look identical from the play list alone and differ exactly
+here — a stalled tracker confirms nothing.
+
+Where the flag has never been stamped — a tracker older than it, or the first
+seconds of a fresh state directory — the page falls back to the play's age with
+a 10-minute window. The list's `now` badge comes from the same computation, so
+the two can never disagree.
 
 `presentation.ts` holds every one of those words and nothing else; `health.ts`
 holds the thresholds and the order. A copy edit must not touch the second file.
@@ -164,21 +257,23 @@ holds the thresholds and the order. A copy edit must not touch the second file.
 The heartbeat is stamped at tick *start*, not completion: a burst tick can
 legitimately run for over a minute, and the 3-minute threshold clears that.
 
+
 Failure counts, retry streaks and error output are deliberately **not** on the
 page. A viewer cannot act on them, and the symptom they can see is the silence
 row above. They go to the journal, where the operator is.
 
 ## Data
 
-Two plain files in `$EARWITNESS_STATE`. No database: with one day retained, every
+Three plain files in `$EARWITNESS_STATE`. No database: with one day retained, every
 relational feature was unused — the index covered at most ~480 rows, the unique
 constraint was unreachable because dedup scans by edit distance first, and the
 foreign key existed only to order the prune. What SQLite did provide, atomic
 writes, is `writeState` in `tracker/src/state.ts`.
 
 ```
-plays.json   ~50 KB   ~400 writes/day   temp file + rename
-live.flag    1 byte    ~2880 writes/day  content 0|1, mtime = heartbeat
+plays.json      ~50 KB   ~400 writes/day   temp file + rename
+live.flag        1 byte   ~2880 writes/day  content 0|1, mtime = heartbeat
+confirmed.flag   0 bytes  ~2450 writes/day  no content, mtime = last confirmation
 ```
 
 ```json
@@ -190,7 +285,7 @@ live.flag    1 byte    ~2880 writes/day  content 0|1, mtime = heartbeat
 `plays.json` holds the day's plays and nothing else. A play is the observation
 and only the observation: `detectedAt`, the clock at the moment the tracker
 *resolved* the song — it lags the song's actual start by up to a burst, which is
-what the six-minute "now" window absorbs — and `credit`, the stitched reading of
+what the confirmation flag absorbs — and `credit`, the stitched reading of
 the ticker. Artist and title are `parseUnit(credit)` and are derived by each
 reader at the point of use, so a parser fix improves the morning's rows on the
 next render instead of waiting for midnight. 113 B/play, about 50 KB at a full
@@ -266,8 +361,8 @@ URL=$(yt-dlp -g 'https://www.youtube.com/@claude/live')
 ffmpeg -loglevel error -i "$URL" -frames:v 1 -vf "crop=520:70:1390:30" -y tick.png \
   && tesseract tick.png stdout --psm 7
 
-# burst: one full marquee loop (stitcher input)
-ffmpeg -loglevel error -t 14 -i "$URL" -vf "crop=520:70:1390:30,fps=1" -y tick_%02d.png
+# burst: two full marquee loops (stitcher input, as the tracker takes it)
+ffmpeg -loglevel error -t 30 -i "$URL" -vf "crop=520:70:1390:30,fps=2" -y tick_%02d.png
 
 # fair A/B of any filter change: record once, apply filters to identical frames
 ffmpeg -loglevel error -t 12 -i "$URL" -c copy -y sample.ts
@@ -282,6 +377,7 @@ re-locate the ticker, then update `crop` in `tracker/src/config.ts`:
 ```bash
 ffmpeg -loglevel error -i "$URL" -frames:v 1 -y frame.png
 ```
+
 
 ## Tests
 

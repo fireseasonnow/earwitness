@@ -2,9 +2,11 @@
  * Burst stitcher: turns ~14 OCR'd marquee fragments into ONE canonical
  * `Artist — Title` unit.
  *
- * Pipeline: align fragments on a shared axis by best overlap → per-column
+ * Pipeline: align fragments on a shared axis by best overlap (twice — the
+ * second pass scores against the first's finished consensus) → per-column
  * majority vote → detect the marquee repeat period → fold votes modulo the
- * period → rotate the cyclic unit at the loop boundary.
+ * period → collapse the fold if it came out holding whole copies → rotate the
+ * cyclic unit at the loop boundary.
  *
  * The rotation point comes from (in priority order):
  *  1. a pause anchor — the marquee holds ~1–2 s at the unit start each loop,
@@ -35,10 +37,32 @@ const MIN_FRAGMENT_LEN = 8;
 const MIN_OVERLAP = 6; // columns of existing data a placement must touch
 const MIN_MATCHES = 6; // absolute matching columns required to accept a placement
 const MIN_MATCH_RATIO = 0.55;
-const SEARCH_BACK = 2; // offsets searched behind the previous fragment's start
+/*
+ * The marquee only ever moves FORWARD, so a correct placement never sits behind
+ * the previous one — but a misread frame placed too far ahead drags `lastOffset`
+ * with it, and every later frame is then searched from the wrong place. 2 was
+ * too tight to climb back: on 2026-08-26 a burst of "Ardley — 01 - Dawn Hour"
+ * placed 22 of 60 frames because the true offset sat one column outside the
+ * window. 8 stays well inside one period, so it cannot alias onto the next
+ * repetition.
+ */
+const SEARCH_BACK = 8; // offsets searched behind the previous fragment's start
 const SEARCH_FWD = 16; // ahead (≈4 chars/frame at 1 fps, wide slack)
-const MIN_PERIOD = 16;
-const MAX_PERIOD = 64;
+/*
+ * Both bounds are the credit's own length, and both were measured too narrow on
+ * 2026-08-26 — between them they accounted for 44 of that day's 62 failed
+ * bursts, every one of which had already produced a clean consensus.
+ *
+ * "Grabek — three" is 14 characters and loops every 15 columns, under the old
+ * floor of 16, so the search skipped its period and found 30 instead: two
+ * copies, which every rotation check then rejected as doubled.
+ * "Ben Seretan — criss cross applesauce right in the stream of the amp" is 67
+ * and loops every ~70, over the old ceiling of 64, so no period was found at
+ * all. 96 leaves headroom above the longest credit seen; the cost of the extra
+ * offsets is one pass over the consensus each.
+ */
+const MIN_PERIOD = 12;
+const MAX_PERIOD = 96;
 // Heavy-noise songs rarely exceed ~0.7 self-agreement even when the period is
 // right; anything mis-detected is still caught by the confidence gates.
 const MIN_PERIOD_SAMPLES = 15;
@@ -156,21 +180,67 @@ interface SeparatorCandidate {
 }
 
 /**
- * True when the unit is two marquee repetitions, not one — a period detected at
- * a multiple of the truth.
+ * The content period of a cyclic string that holds WHOLE repetitions of itself,
+ * or null when it holds one.
  *
- * The ` — ` count below is supposed to catch that and cannot: a rotation that
- * lands on the separator strips the leading space off the duplicate
- * (`— walls are humming Ben Seretan — walls are humming`), and heavy OCR noise
- * degrades it outright (` n ` for `an — `), leaving exactly one ` — ` in a
- * string holding the song twice. Comparing the halves does not care how the
- * second separator was mangled.
+ * Rotation is the test, not a comparison of halves. The ♪ separator OCRs at a
+ * different width in each repetition (` `, ` - `, ` C `), so two copies inside
+ * one period are not the same length and no fixed split lands on both — a
+ * halves comparison missed "Reunion Passport — Reunion - Passport — " for
+ * exactly that reason. Rotating by the content period slides every copy onto
+ * its neighbour and costs only the separator's few characters.
+ *
+ * Whole copies only: `n` must be within 3 of an integer multiple of `k`. That
+ * constraint is what stops a real credit from collapsing onto a prefix of
+ * itself — "Ben Seretan — criss cross applesauce…" has no k dividing its 67
+ * columns that also matches under rotation.
  */
-function looksDoubled(unit: string): boolean {
-  if (unit.length < 20) return false;
-  const half = Math.floor(unit.length / 2);
-  const budget = Math.max(2, Math.round(0.3 * half)); // OCR mangles one copy
-  return editDistance(unit.slice(0, half), unit.slice(unit.length - half)) <= budget;
+function repeatPeriod(cyclic: string, budget: number): number | null {
+  const n = cyclic.length;
+  for (let k = MIN_PERIOD; k <= n / 2; k++) {
+    const copies = Math.round(n / k);
+    if (copies < 2 || Math.abs(n - copies * k) > 3) continue;
+    const rotated = cyclic.slice(k) + cyclic.slice(0, k);
+    if (editDistance(cyclic, rotated) <= Math.max(2, Math.round(budget * n))) return k;
+  }
+  return null;
+}
+
+/**
+ * Two budgets, because a period that came out a multiple has two very different
+ * cases behind it.
+ *
+ * Copies that agree (`COLLAPSE`) are a period detected at 2× or 3× the truth —
+ * a short credit whose real loop sat under the search floor, or one whose
+ * separator alternates. There the fold is sound and one copy IS the unit, so
+ * `collapseRepeats` keeps one.
+ *
+ * Copies that merely resemble each other (`REJECT`) mean the fold smeared two
+ * readings of the song together, and no slice of it is a credit. That is the
+ * one the row must never see: it reads as "Kelley - Tonkotsu (Relceets Owen
+ * Kelley — Tonkotsu (RelOwen Kelley", which parses perfectly well.
+ */
+const COLLAPSE_BUDGET = 0.15;
+const REJECT_BUDGET = 0.35;
+/**
+ * OCR can mangle a copy past any whole-string comparison and still leave the
+ * evidence in place: a credit does not say the same ten characters twice, and a
+ * fold of two repetitions does.
+ */
+const REPEATED_RUN = 10;
+
+/** One repetition of a cyclic period that turned out to hold several. */
+function collapseRepeats(cyclic: string): string {
+  const k = repeatPeriod(cyclic, COLLAPSE_BUDGET);
+  return k === null ? cyclic : cyclic.slice(0, k);
+}
+
+function hasRepeatedRun(unit: string, len: number): boolean {
+  const s = unit.toLowerCase();
+  for (let i = 0; i + len <= s.length; i++) {
+    if (s.indexOf(s.slice(i, i + len), i + 1) >= 0) return true;
+  }
+  return false;
 }
 
 /** A rotation is plausible only if it reads as a single `Artist — Title`. */
@@ -181,7 +251,8 @@ function validUnit(unit: string): boolean {
     !SPACE_RUN.test(unit) &&
     !JUNK_ISLAND.test(unit) &&
     !/^\s|\s$/.test(unit) &&
-    !looksDoubled(unit)
+    repeatPeriod(unit, REJECT_BUDGET) === null &&
+    !hasRepeatedRun(unit, REPEATED_RUN)
   );
 }
 
@@ -213,31 +284,40 @@ function sepLenBefore(doubled: string, idx: number): number {
   return n;
 }
 
-export function stitch(fragments: string[]): StitchResult {
-  const frags = fragments
-    .map((f) => f.replace(/[\r\n]+/g, " ").trimEnd())
-    .filter((f) => f.trim().length >= MIN_FRAGMENT_LEN);
+interface Placed {
+  tally: Tally;
+  placements: { text: string; offset: number }[];
+  dropped: string[];
+}
 
-  if (frags.length < MIN_FRAGMENTS) {
-    return { unit: null, confident: false, reason: "too_few_fragments", droppedFragments: frags };
-  }
-
-  // 1. Place fragments on a shared axis by best overlap against everything
-  //    placed so far (more robust than strictly consecutive pairs).
+/**
+ * Place fragments on a shared column axis, each at its best-scoring offset.
+ *
+ * `reference` is what a placement is scored against: null for the first pass,
+ * which scores against the tally it is building, or a finished tally for the
+ * second. Votes always accumulate into the pass's OWN tally either way, so a
+ * second pass never feeds its own placements back into the reference it is
+ * being judged by.
+ */
+function placeFragments(frags: string[], reference: Tally | null): Placed {
   const tally = new Tally();
+  const against = reference ?? tally;
   const placements: { text: string; offset: number }[] = [];
   const dropped: string[] = [];
   let lastOffset = 0;
   for (let i = 0; i < frags.length; i++) {
     const f = frags[i];
-    if (i === 0) {
+    // The first pass has nothing to score against until something is placed, so
+    // frame 0 anchors the axis at 0. The second has the whole consensus and
+    // scores frame 0 like any other.
+    if (reference === null && i === 0) {
       tally.addFragment(f, 0);
       placements.push({ text: f, offset: 0 });
       continue;
     }
     let best: { offset: number; matches: number; overlap: number } | null = null;
     for (let s = lastOffset - SEARCH_BACK; s <= lastOffset + SEARCH_FWD; s++) {
-      const { matches, overlap } = scorePlacement(tally, f, s);
+      const { matches, overlap } = scorePlacement(against, f, s);
       if (overlap < MIN_OVERLAP) continue;
       const score = matches * 2 - overlap; // matches - mismatches
       const bestScore = best ? best.matches * 2 - best.overlap : -Infinity;
@@ -251,6 +331,35 @@ export function stitch(fragments: string[]): StitchResult {
       dropped.push(f);
     }
   }
+  return { tally, placements, dropped };
+}
+
+/**
+ * Stitch one alignment of one burst. `stitch` below is what callers want: this
+ * assumes every fragment is a window onto the SAME credit.
+ */
+function stitchAligned(fragments: string[]): StitchResult {
+  const frags = fragments
+    .map((f) => f.replace(/[\r\n]+/g, " ").trimEnd())
+    .filter((f) => f.trim().length >= MIN_FRAGMENT_LEN);
+
+  if (frags.length < MIN_FRAGMENTS) {
+    return { unit: null, confident: false, reason: "too_few_fragments", droppedFragments: frags };
+  }
+
+  /*
+   * 1. Place fragments on a shared axis by best overlap, twice: the first pass
+   *    scores each fragment against whatever happened to be placed before it,
+   *    so the early ones are judged by a nearly empty tally and the whole axis
+   *    hangs off frame 0. The second scores every fragment against the finished
+   *    consensus of the first, which is why it can place fragments the first
+   *    dropped — and it is kept only if it places MORE of them, so a pass that
+   *    goes worse cannot make the burst worse.
+   */
+  const first = placeFragments(frags, null);
+  const second = placeFragments(frags, first.tally);
+  const { tally, placements, dropped } =
+    second.placements.length > first.placements.length ? second : first;
   if (placements.length < MIN_FRAGMENTS) {
     return { unit: null, confident: false, reason: "too_few_aligned", droppedFragments: dropped };
   }
@@ -287,23 +396,30 @@ export function stitch(fragments: string[]): StitchResult {
   if (!periodPick) {
     return { unit: null, confident: false, reason: "no_repeat_period", droppedFragments: dropped };
   }
-  const period = periodPick.period;
+  const foldPeriod = periodPick.period;
 
   // 4. Fold votes modulo the period so every unit position accumulates
   //    votes from all marquee repetitions.
   const folded = new Tally();
   for (const [col, votes] of tally.cols) {
-    const p = (((col - minCol) % period) + period) % period;
+    const p = (((col - minCol) % foldPeriod) + foldPeriod) % foldPeriod;
     for (const [ch, n] of votes) folded.add(p, ch, n);
   }
-  const unitChars = new Array<string>(period);
+  const unitChars = new Array<string>(foldPeriod);
   const lowConf = new Set<number>();
-  for (let p = 0; p < period; p++) {
+  for (let p = 0; p < foldPeriod; p++) {
     const top = folded.top(p);
     unitChars[p] = top ? top.char : " ";
     if (!top || (top.voters >= 2 && !top.majority)) lowConf.add(p);
   }
-  const cyclic = unitChars.join("");
+  /*
+   * A period detected at a multiple of the marquee's own folds whole copies of
+   * the credit into one cyclic string. One copy is the unit; `lowConf` keeps its
+   * positions from the fold, which is why the collapse keeps the FIRST copy —
+   * its indexes are the ones those flags were recorded against.
+   */
+  const cyclic = collapseRepeats(unitChars.join(""));
+  const period = cyclic.length;
   const doubled = cyclic + cyclic;
   const evaluate = (c: SeparatorCandidate) =>
     doubled.slice(c.start + c.len, c.start + period);
@@ -379,4 +495,42 @@ export function stitch(fragments: string[]): StitchResult {
     reason: reasons.length > 0 ? reasons.join(",") : null,
     droppedFragments: dropped,
   };
+}
+
+/**
+ * A burst can straddle a song change, and then nothing explains all of it: the
+ * frames hold two different credits, the alignment is fighting itself, and the
+ * period search finds nothing. That was 2026-08-26's largest remaining failure
+ * class, and it is the one case where refusing costs the most — a transition is
+ * exactly when the page most needs the new row.
+ *
+ * So the burst is retried on each half, the LATER one first: the tracker bursts
+ * because the marquee changed, so the newer song is the one on air and the one
+ * the row should carry.
+ *
+ * A half is weaker evidence than a whole burst — half the frames, and the cut is
+ * arbitrary rather than placed at the transition — so it has to be cleaner: a
+ * half that also could not align a third of its frames is refused. That bar is
+ * what keeps `Owen Kelley — Tonkotsu (Re` off the row, a truncation this path
+ * produced from a burst whose alignment had compressed at the loop wrap. It also
+ * refuses reads that were correct, which is the trade this project keeps making
+ * in that direction.
+ */
+export function stitch(fragments: string[]): StitchResult {
+  const whole = stitchAligned(fragments);
+  if (whole.unit !== null || fragments.length < 2 * MIN_FRAGMENTS) return whole;
+
+  const mid = Math.floor(fragments.length / 2);
+  for (const half of [fragments.slice(mid), fragments.slice(0, mid)]) {
+    const res = stitchAligned(half);
+    if (res.unit === null || (res.reason ?? "").includes("many_fragments_dropped")) continue;
+    // Never confident: the caller widens the dedup budget, and the journal gets
+    // `burst_split` so a run of these is visible as what it is.
+    return {
+      ...res,
+      confident: false,
+      reason: [res.reason, "burst_split"].filter(Boolean).join(","),
+    };
+  }
+  return whole;
 }

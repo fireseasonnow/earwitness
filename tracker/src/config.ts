@@ -17,7 +17,14 @@ export const CONFIG = {
    * why no_repeat_period dominated on long credits and never appeared on short
    * ones. Measured 2026-08-25: the marquee scrolls ~4 chars/s, so a 49-char
    * unit ("Siren and the Sea — 10 - The Large Floating Vessel") loops in ~14 s
-   * including the hold. 30 s clears two loops for anything up to ~55 chars.
+   * including the hold.
+   *
+   * Credits run longer than the ~55 chars this comment used to assume: the
+   * longest seen is 67 ("Ben Seretan — criss cross applesauce right in the
+   * stream of the amp"), looping every ~70 columns. A 30 s burst spans ~146
+   * columns of that marquee — measured, not derived — so it still clears two
+   * loops at the top of the range. Lengthen this before raising MAX_PERIOD in
+   * `stitch.ts` any further, or the period search will outrun the evidence.
    */
   burstSeconds: 30,
   /**
@@ -76,5 +83,6 @@ export const CONFIG = {
   // is spent in full on every failure and silently eats the tick.
   captureTimeoutMs: 15_000,
   burstTimeoutMs: 90_000, // 30 s burst (burstSeconds) incl. HLS startup
+
   resolveTimeoutMs: 60_000, // yt-dlp
 } as const;

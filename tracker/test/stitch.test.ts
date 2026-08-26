@@ -27,18 +27,68 @@ describe("fixture 3 — burst after the transition", () => {
   });
 });
 
+describe("the credit's own length — both period bounds were measured too narrow", () => {
+  test("fixture 6 — a 67-character credit loops past the old ceiling of 64", async () => {
+    const frags = await loadFixture("fixture6-long-credit.txt");
+    expect(stitch(frags).unit).toBe(
+      "Ben Seretan — criss cross applesauce right in the stream of the amp",
+    );
+  });
+
+  test("fixture 7 — a 14-character credit loops under the old floor of 16", async () => {
+    const frags = await loadFixture("fixture7-short-credit.txt");
+    expect(stitch(frags).unit).toBe("Grabek — three");
+  });
+
+  test("fixture 8 — the ♪ renders as nothing then as '-', so the copies inside the period are 19 and 21 columns", async () => {
+    const frags = await loadFixture("fixture8-alternating-separator.txt");
+    expect(stitch(frags).unit).toBe("Passport — Reunion");
+  });
+});
+
+describe("fixture 9 — a fold holding the song three times, one copy mangled", () => {
+  test("it parses as a credit and is still refused", async () => {
+    const frags = await loadFixture("fixture9-smeared-repeat.txt");
+    expect(stitch(frags).unit).toBeNull();
+  });
+
+  test("the same shape built by hand is refused too", () => {
+    const one = "Ardley — 01 - Dawn Hour";
+    const doubled = `${one} ${one.replace("01", "1M").replace("Hour", "ro")}`;
+    const frags = Array.from({ length: 20 }, (_, i) => (doubled + " " + doubled).slice(i, i + 28));
+    expect(stitch(frags).unit).not.toBe(doubled);
+  });
+});
+
 describe("fixture 5 — unstitchable burst", () => {
-  /*
-   * Kept as a failing burst on purpose: it is what `burstStillShows` exists
-   * for. If a stitcher improvement ever recovers this one, that is good news
-   * and this test is the notice to go find another failure to hold the
-   * fingerprint test honest.
-   */
+  // Kept failing on purpose: the fingerprint test confirms from this burst.
   test("readable frames are not enough — the loop is unrecoverable", async () => {
     const frags = await loadFixture("fixture5-unstitchable-burst.txt");
     const res = stitch(frags);
     expect(res.unit).toBeNull();
     expect(res.reason).toContain("no_repeat_period");
+  });
+});
+
+describe("a burst that straddles a song change", () => {
+  test("fixture 10 — half is `criss cross applesauce`, half is `Fiddleheads Unfurling`", async () => {
+    const frags = await loadFixture("fixture10-transition-burst.txt");
+    const res = stitch(frags);
+    // The later half: the tracker bursts because the marquee changed.
+    expect(res.unit).toBe("Parker Tichko — Fiddleheads Unfurling");
+    expect(res.reason).toContain("burst_split");
+    expect(res.confident).toBe(false);
+  });
+
+  test("fixture 11 — a half that drops a third of its frames is refused", async () => {
+    // Recovers as "Owen Kelley — Tonkotsu (Re" without the bar: the alignment
+    // compressed at the loop wrap and the fold came out a period short.
+    const frags = await loadFixture("fixture11-compressed-wrap.txt");
+    expect(stitch(frags).unit).toBeNull();
+  });
+
+  test("a burst too short to halve is left alone", () => {
+    expect(stitch(["Grabek — three Grabek", "abek — three Grabek —"]).unit).toBeNull();
   });
 });
 
@@ -79,8 +129,7 @@ describe("double-period rotations", () => {
    * the duplicate separator and leaves exactly one.
    *
    * The assertion is the property, not a string: a unit may never contain the
-   * song twice. Refusing is a fine outcome — the caller then falls back to the
-   * best single fragment, which is closer to the truth than a doubled name.
+   * song twice. Refusing is a fine outcome.
    */
   const timesRepeated = (unit: string | null): number =>
     unit === null ? 0 : (unit.toLowerCase().match(/humming/g) ?? []).length;
