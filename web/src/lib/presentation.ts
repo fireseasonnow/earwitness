@@ -50,16 +50,34 @@ function plural(n: number, unit: string): string {
   return `${n} ${unit}${n === 1 ? "" : "s"}`;
 }
 
-/** Under 3 minutes by construction — past that the state is `offline`. */
+/**
+ * How long ago the tracker last read the ticker, at the resolution the page can
+ * actually keep.
+ *
+ * Under 3 minutes by construction — past that the state is `offline`.
+ *
+ * Seconds are deliberately NOT shown. The page is server-rendered and refreshes
+ * every 30 s, so a figure quoted to the second is re-computed six times a minute
+ * at best and sits frozen in between; worse, it does not climb. A burst tick
+ * runs over a minute while an ordinary one takes 30 s, so consecutive refreshes
+ * read "47 seconds", then "12 seconds", then "39 seconds", which looks like a
+ * fault and is not one. The precision was never real.
+ *
+ * What is left is the only distinction a viewer can act on: the tracker looked
+ * at the marquee just now, or it is lagging and the newest row may be behind.
+ * The exact figure is operator telemetry — the same reason the old `degraded`
+ * failure count was taken off the page — and it stays in the journal, where an
+ * operator already reads `live.flag` timings anyway.
+ */
 function ago(seconds: number): string {
-  return seconds < 60 ? plural(seconds, "second") : plural(Math.floor(seconds / 60), "minute");
+  return seconds < 60 ? "just now" : plural(Math.floor(seconds / 60), "minute") + " ago";
 }
 
 export function hero(state: DisplayState): Hero {
   switch (state.kind) {
     case "ok": {
       const at = amsTime(state.play.detectedAt);
-      const read = `ticker read ${ago(state.tickerReadSecondsAgo)} ago`;
+      const read = `ticker read ${ago(state.tickerReadSecondsAgo)}`;
       // "Now playing" assumes the newest play is what is on the air. Outside
       // the 6-minute window that is a claim the data does not support, so the
       // hero keeps its shape and drops it.

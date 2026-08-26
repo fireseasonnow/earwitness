@@ -61,7 +61,7 @@ describe("hero — the on-air states", () => {
     expect(h.kicker).toBe("On air · now playing");
     expect(h.headline).toBe("kokosing");
     expect(h.artist).toBe("Ben Seretan");
-    expect(h.detail).toBe("Since 11:41 AM · ticker read 12 seconds ago");
+    expect(h.detail).toBe("Since 11:41 AM · ticker read just now");
     expect(h.tone).toBe("live");
   });
 
@@ -69,7 +69,7 @@ describe("hero — the on-air states", () => {
     const now = hero({ kind: "ok", play: PLAY, nowPlaying: true, tickerReadSecondsAgo: 12 });
     const past = hero({ kind: "ok", play: PLAY, nowPlaying: false, tickerReadSecondsAgo: 12 });
     expect(past.kicker).toBe("On air · last logged");
-    expect(past.detail).toBe("Logged at 11:41 AM · ticker read 12 seconds ago");
+    expect(past.detail).toBe("Logged at 11:41 AM · ticker read just now");
     expect(past.headline).toBe(now.headline);
     expect(past.tone).toBe(now.tone);
     expect(past.showLog).toBe(now.showLog);
@@ -145,17 +145,27 @@ describe("hero — plurals", () => {
     hero({ kind: "ok", play: PLAY, nowPlaying: true, tickerReadSecondsAgo: seconds }).detail;
 
   test("one is singular, everything else is not", () => {
-    expect(detailFor(1)).toContain("1 second ago");
-    expect(detailFor(2)).toContain("2 seconds ago");
-    expect(detailFor(0)).toContain("0 seconds ago");
+    expect(detailFor(60)).toContain("1 minute ago");
+    expect(detailFor(125)).toContain("2 minutes ago");
     expect(hero({ kind: "stalled", silenceMinutes: 1 }).headline).toBe("Nothing new for 1 minute");
     expect(hero({ kind: "stalled", silenceMinutes: 16 }).headline).toBe("Nothing new for 16 minutes");
   });
 
-  test("the ticker reading crosses to minutes at 60 seconds", () => {
-    expect(detailFor(59)).toContain("59 seconds ago");
-    expect(detailFor(60)).toContain("1 minute ago");
-    expect(detailFor(125)).toContain("2 minutes ago");
+  test("a reading under a minute is not quoted in seconds", () => {
+    // The page re-renders every 30 s and a burst tick runs over a minute, so a
+    // figure in seconds neither holds still nor climbs. Everything inside the
+    // refresh window reads the same, and it is the same phrase at 0 as at 59.
+    for (const s of [0, 1, 2, 29, 30, 59]) {
+      expect(detailFor(s)).toContain("ticker read just now");
+      expect(detailFor(s)).not.toContain("second");
+    }
+  });
+
+  test("past a minute it says how far behind, because that is actionable", () => {
+    expect(detailFor(60)).toContain("ticker read 1 minute ago");
+    expect(detailFor(125)).toContain("ticker read 2 minutes ago");
+    // Bounded by construction: past STALE_MS the state is `offline`, not `ok`.
+    expect(detailFor(179)).toContain("ticker read 2 minutes ago");
   });
 });
 
