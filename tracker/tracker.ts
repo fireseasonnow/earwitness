@@ -240,13 +240,32 @@ async function tick(): Promise<void> {
   const url = await getUrl();
   const framePaths = await captureBurst(url);
   const fragments: string[] = [];
+  /*
+   * Bounded: 60 tesseract calls at 20 s apiece is twenty minutes of tick, and a
+   * slow one logs nothing while it runs. Checked BEFORE each call so none is
+   * started that cannot be afforded; the one already in flight can overrun by
+   * its own timeout, which `burstOcrBudgetMs` accounts for.
+   */
+  const ocrDeadline = Date.now() + CONFIG.burstOcrBudgetMs;
+  let read = 0;
   for (const p of framePaths) {
+    if (Date.now() > ocrDeadline) break;
+    read++;
     try {
       const t = await ocrFrame(p);
       if (t.trim().length > 0) fragments.push(t);
     } catch {
       // one bad frame must not kill the burst
     }
+  }
+  if (read < framePaths.length) {
+    // Not an error — the burst still stitches if enough frames got through.
+    // It is the only signal that the host could not keep up, and the journal is
+    // where that has to be visible.
+    log(
+      `anomaly burst_ocr_budget — read ${read}/${framePaths.length} frames` +
+        ` in ${CONFIG.burstOcrBudgetMs} ms (host under load?)`,
+    );
   }
 
   const res = stitch(fragments);

@@ -268,6 +268,19 @@ holds the thresholds and the order. A copy edit must not touch the second file.
 The heartbeat is stamped at tick *start*, not completion: a burst tick can
 legitimately run for over a minute, and the 3-minute threshold clears that.
 
+That threshold only means anything if a tick cannot outlast it, and for a long
+time one could. `burstTimeoutMs` bounds the ffmpeg capture but not the OCR after
+it: 60 frames at 20 s apiece is twenty minutes, and because no single call
+timed out, nothing was raised and nothing was logged. On 2026-08-26 a loaded
+host turned one tick into a 7 min 39 s blackout with no line in the journal, and
+the song change inside it was reported eight minutes late. `burstOcrBudgetMs`
+now caps the OCR phase at 45 s — five times the ~9 s it takes on an idle host —
+so capture, budget and the last frame's own timeout come to 155 s and stay
+inside the window. Past the budget the loop stitches from the frames it has and
+logs `burst_ocr_budget` with the count; a truncated burst that no longer spans
+two marquee loops simply fails to stitch, which is the ordinary refusal. Raise
+this above ~60 s and the page's "offline" stops distinguishing a dead tracker
+from a slow one.
 
 Failure counts, retry streaks and error output are deliberately **not** on the
 page. A viewer cannot act on them, and the symptom they can see is the silence

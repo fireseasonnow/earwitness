@@ -123,5 +123,31 @@ export const CONFIG = {
   captureTimeoutMs: 15_000,
   burstTimeoutMs: 90_000, // 30 s burst (burstSeconds) incl. HLS startup
 
+  /**
+   * Wall-clock budget for OCR'ing a burst's frames — the phase that had no
+   * bound at all.
+   *
+   * `burstTimeoutMs` above covers only the ffmpeg capture. The OCR that follows
+   * is `burstSeconds * burstFps` (60) sequential tesseract calls, each allowed
+   * 20 s of its own, so a single tick could legally run twenty minutes. Nothing
+   * threw while it did, so nothing reached the journal: on 2026-08-26 a loaded
+   * host turned one tick into a 7 min 39 s blackout with not a line logged, and
+   * a song change inside it was reported eight minutes late. Any CPU pressure
+   * reproduces it — an upgrade, a backup, thermal throttling on this box.
+   *
+   * 45 s is five times what the work actually takes: measured that day, 152 ms
+   * a frame on an idle host, so a full 60-frame burst OCRs in ~9 s. Past the
+   * budget the loop stops and stitches from what it has, which the stitcher
+   * supports down to MIN_FRAGMENTS.
+   *
+   * The size is chosen against the PAGE, not the work: the web app calls the
+   * tracker offline after 3 minutes without a heartbeat, and the heartbeat is
+   * stamped at tick start. Capture (90 s) + this budget (45 s) + the final
+   * frame's own timeout (20 s) is 155 s, so even a worst-case burst tick stays
+   * inside that window and "no heartbeat" keeps meaning a dead tracker rather
+   * than a slow one. Raising this above ~60 s breaks that and should not be
+   * done without moving STALE_MS with it.
+   */
+  burstOcrBudgetMs: 45_000,
   resolveTimeoutMs: 60_000, // yt-dlp
 } as const;
