@@ -21,7 +21,7 @@ import {
   writeConfirmedFlag,
   writeLiveFlag,
 } from "./src/state";
-import { isSameSong } from "./src/fingerprint";
+import { burstStillShows, isSameSong } from "./src/fingerprint";
 import { log } from "./src/log";
 import { normalize } from "./src/normalize";
 import { StreamUrl } from "./src/resolve";
@@ -113,6 +113,13 @@ function rolloverIfNeeded(): void {
 function noisyBudget(unit: string): number {
   return Math.max(3, Math.round(0.2 * normalize(unit).length));
 }
+
+/**
+ * Frames at the end of a burst that may confirm the current song when the
+ * stitch fails. Derived from the capture rate rather than written down, so the
+ * window stays ten seconds whatever `burstFps` becomes.
+ */
+const CONFIRM_TAIL_FRAMES = Math.ceil(CONFIG.confirmTailSeconds * CONFIG.burstFps);
 
 /**
  * Tick capture with one failure-triggered re-resolve + retry.
@@ -211,6 +218,18 @@ async function tick(): Promise<void> {
   if (res.unit === null) {
     failedStitchStreak++;
     burstCooldownTicks = Math.min(6, 2 ** failedStitchStreak); // 2, 4, 6, 6…
+    // A burst that will not STITCH has still READ the marquee, and its last
+    // frames may plainly show the song already on the row — that is exactly
+    // what a `no_repeat_period` failure looks like. Confirming from them is the
+    // same claim the cheap path makes from one tick frame, on the same test and
+    // the same budget, so the page keeps saying "now playing" for a song the
+    // tracker can still see. What stays withheld is the row: no play is written
+    // and `currentUnit` does not move, because confirming a song is not the
+    // same as reading a new one.
+    const stillShowing =
+      currentUnit !== null &&
+      burstStillShows(fragments, currentUnit, CONFIRM_TAIL_FRAMES, CONFIG.fuzzyMaxEdits);
+    if (stillShowing) writeConfirmedFlag(CONFIG.stateDir);
     // The fragments are the only evidence of WHY the stitcher failed, and
     // nothing stores them now — so they go in the line, on EVERY failure. The
     // frame files are overwritten by the next burst and no row is written for
@@ -218,7 +237,8 @@ async function tick(): Promise<void> {
     // leave a song unrecoverable the moment the stream's DVR window closes.
     log(
       `anomaly low_confidence_stitch (${res.reason}) streak ${failedStitchStreak}` +
-        ` — keeping current song fragments=${JSON.stringify(fragments)}` +
+        ` — keeping current song (still showing: ${stillShowing})` +
+        ` fragments=${JSON.stringify(fragments)}` +
         ` tickText=${JSON.stringify(text)}`,
     );
     // A repeatedly unstitchable song stays OFF the row. A single unvoted

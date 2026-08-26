@@ -44,9 +44,13 @@ const MAX_PERIOD = 64;
 const MIN_PERIOD_SAMPLES = 15;
 const MIN_PERIOD_RATIO = 0.68;
 const PAUSE_TEXT_MIN_LEN = 15;
-// Consecutive frames scroll ~4 chars (≈8+ edits apart), so even a loose text
-// budget cannot false-anchor mid-scroll; equal offsets are the real gate.
-const PAUSE_MAX_EDITS = 4;
+// Scaled with `burstFps`. The real gate is the offset test below (mid-scroll
+// frames sit ~2 columns apart at 2 fps, ~4 at 1 fps, and must be within 1 to
+// anchor), but this budget has to stay proportional to it: at 1 fps consecutive
+// frames were ~8+ edits apart and 4 was slack, while at 2 fps they are ~4 apart
+// and 4 would sit exactly on a mid-scroll pair. A real pause holds the same text
+// for 2-4 frames, so 2 still clears it comfortably.
+const PAUSE_MAX_EDITS = 2;
 
 // The ♪ separator between marquee repetitions, as OCR actually renders it.
 const SPACE_RUN = / {2,}/; // ♪ rendered as nothing → collapsed gap

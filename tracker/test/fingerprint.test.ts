@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildReferences, fuzzySubstringDistance, isSameSong } from "../src/fingerprint";
+import {
+  buildReferences,
+  burstStillShows,
+  fuzzySubstringDistance,
+  isSameSong,
+} from "../src/fingerprint";
 import { loadFixture } from "./helpers";
 
 describe("fuzzySubstringDistance", () => {
@@ -53,5 +58,39 @@ describe("fixture 3 — change detection", () => {
 describe("isSameSong edge cases", () => {
   test("very short OCR text never matches", () => {
     expect(isSameSong("dd |", "Orions Belte — Manual Shear")).toBe(false);
+  });
+});
+
+describe("burstStillShows — confirming from a burst the stitcher rejected", () => {
+  // fixture 5 is a real no_repeat_period failure: the stitcher could not find
+  // the loop, while the frames plainly read "Owen Kelley — Tonkotsu
+  // (Reloaded)". Before this, four minutes of that song showed no "now playing"
+  // on the page even though the tracker was reading it on every burst.
+  const currentUnit = "Owen Kelley — Tonkotsu (Reloaded)";
+
+  test("the tail of the unstitchable burst confirms the current song", async () => {
+    const frags = await loadFixture("fixture5-unstitchable-burst.txt");
+    expect(burstStillShows(frags, currentUnit, 20)).toBe(true);
+  });
+
+  test("a burst of another song does not confirm it", async () => {
+    const frags = await loadFixture("fixture2-clean-stitch.txt");
+    expect(burstStillShows(frags, currentUnit, 20)).toBe(false);
+  });
+
+  // The reason the window is a tail and not the whole burst: fixture 3 crosses
+  // a song change at frame 9, so the old song is still in the early frames of a
+  // burst whose marquee has already moved on. Confirming from those would hold
+  // "now playing" on a song that has ended.
+  test("frames before a transition cannot confirm the song that ended", async () => {
+    const lines = await loadFixture("fixture3-transition.txt");
+    const oldUnit = "Orions Belte — Manual Shear";
+    expect(burstStillShows(lines, oldUnit, lines.length)).toBe(true); // whole burst
+    expect(burstStillShows(lines, oldUnit, lines.length - 8)).toBe(false); // tail only
+  });
+
+  test("a tail longer than the burst is the burst, not an error", async () => {
+    const frags = await loadFixture("fixture5-unstitchable-burst.txt");
+    expect(burstStillShows(frags, currentUnit, 500)).toBe(true);
   });
 });

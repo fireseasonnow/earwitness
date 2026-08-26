@@ -10,9 +10,14 @@ export const CONFIG = {
   crop: "crop=520:70:1390:30", // credit ticker at 1080p
 
   tickIntervalMs: 30_000,
-  // Must cover one full marquee loop INCLUDING the ~1-2 s hold at the unit
-  // start: loop ≈ unitLen/4 + pause. Live units reach ~55 chars → 18 s.
-  burstSeconds: 18,
+  // Must cover TWO full marquee loops, not one. Period detection folds votes
+  // modulo the period, so a burst covering 1.26 loops leaves only the overlap
+  // columns with a second sample — ~15, exactly MIN_PERIOD_SAMPLES, which is
+  // why no_repeat_period dominated on long credits and never appeared on short
+  // ones. Measured 2026-08-25: the marquee scrolls ~4 chars/s, so a 49-char
+  // unit ("Siren and the Sea — 10 - The Large Floating Vessel") loops in ~14 s
+  // including the hold. 30 s clears two loops for anything up to ~55 chars.
+  burstSeconds: 30,
   /**
    * Two frames a second, not one.
    *
@@ -25,6 +30,19 @@ export const CONFIG = {
    * 18, on the ~15% burst path only.
    */
   burstFps: 2,
+
+  /**
+   * How much of a burst's TAIL may confirm the song already on the row when the
+   * stitch FAILS (`burstStillShows`).
+   *
+   * Ten seconds, so the frames that vote are no older than the tick frame the
+   * cheap path confirms from (~4 s: one capture plus one OCR). Longer would
+   * reach back into a burst that may straddle a song change and let the
+   * outgoing song confirm itself; shorter throws away readable frames for
+   * nothing. Multiplied by `burstFps`, never written as a frame count, so
+   * changing the capture rate cannot silently change the window.
+   */
+  confirmTailSeconds: 10,
 
   // `yt-dlp -g` returns a media-playlist URL, not a durable stream URL: it is a
   // snapshot of a sliding window of 2 s segments and stops working after ~25-30 s
@@ -51,6 +69,6 @@ export const CONFIG = {
   // bounds the pathological case, so it must stay small: a generous timeout here
   // is spent in full on every failure and silently eats the tick.
   captureTimeoutMs: 15_000,
-  burstTimeoutMs: 60_000, // 18 s burst (burstSeconds) incl. HLS startup
+  burstTimeoutMs: 90_000, // 30 s burst (burstSeconds) incl. HLS startup
   resolveTimeoutMs: 60_000, // yt-dlp
 } as const;

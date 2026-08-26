@@ -61,3 +61,31 @@ export function isSameSong(tickText: string, unit: string, maxEdits = 2): boolea
   if (t.length < 8) return false; // too little text to trust a match
   return buildReferences(unit).some((ref) => fuzzySubstringDistance(t, ref) <= maxEdits);
 }
+/**
+ * Does the END of a burst still read as `unit`?
+ *
+ * This is the evidence a FAILED stitch leaves behind. Stitching has to recover
+ * the marquee's loop, and it can fail on frames that plainly show the song:
+ * in `fixture5-unstitchable-burst.txt` — a real `no_repeat_period` failure —
+ * 12 of 59 frames match the current unit inside the ordinary tick budget, the
+ * last of them by a single edit. Withholding confirmation there tells the page
+ * the marquee has become unreadable, when what happened is that it was read and
+ * had not changed.
+ *
+ * Only the TAIL counts, and that is the whole difference between this and
+ * "some frame somewhere said the old song". A burst spans half a minute; a song
+ * that changes inside it leaves its predecessor in the early frames, and
+ * confirming from those would pin the page to a song that has already ended.
+ * The last frames are as recent as the tick frame the cheap path confirms from.
+ *
+ * Same test and same budget as `isSameSong` by construction — this IS
+ * `isSameSong`, applied to the frames the stitcher could not assemble.
+ */
+export function burstStillShows(
+  fragments: string[],
+  unit: string,
+  tailFrames: number,
+  maxEdits?: number,
+): boolean {
+  return fragments.slice(-tailFrames).some((f) => isSameSong(f, unit, maxEdits));
+}

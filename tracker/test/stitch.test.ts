@@ -27,6 +27,19 @@ describe("fixture 3 — burst after the transition", () => {
   });
 });
 
+describe("fixture 5 — unstitchable burst", () => {
+  // Kept as a failing burst on purpose: it is what `burstStillShows` exists
+  // for. If a stitcher improvement ever recovers this one, that is good news
+  // and this test is the notice to go find another failure to hold the
+  // fingerprint test honest.
+  test("readable frames are not enough — the loop is unrecoverable", async () => {
+    const frags = await loadFixture("fixture5-unstitchable-burst.txt");
+    const res = stitch(frags);
+    expect(res.unit).toBeNull();
+    expect(res.reason).toContain("no_repeat_period");
+  });
+});
+
 describe("robustness", () => {
   test("empty and whitespace-only fragments are dropped", async () => {
     const frags = await loadFixture("fixture2-clean-stitch.txt");
