@@ -147,11 +147,13 @@ async function captureTickWithRetry(): Promise<string> {
 
 async function tick(): Promise<void> {
   rolloverIfNeeded();
-  // Stamped BEFORE any capture: a burst tick can legitimately run for over a
-  // minute, and stamping on completion would make a healthy tracker look stale
-  // during exactly the interesting moments. The failure streaks stay
-  // in memory — they drive log throttling and burst backoff below, and a viewer
-  // has no action to take on them.
+  /*
+   * Stamped BEFORE any capture: a burst tick can legitimately run for over a
+   * minute, and stamping on completion would make a healthy tracker look stale
+   * during exactly the interesting moments. The failure streaks stay
+   * in memory — they drive log throttling and burst backoff below, and a viewer
+   * has no action to take on them.
+   */
   writeLiveFlag(CONFIG.stateDir, streamLive);
 
   let framePath: string;
@@ -218,34 +220,40 @@ async function tick(): Promise<void> {
   if (res.unit === null) {
     failedStitchStreak++;
     burstCooldownTicks = Math.min(6, 2 ** failedStitchStreak); // 2, 4, 6, 6…
-    // A burst that will not STITCH has still READ the marquee, and its last
-    // frames may plainly show the song already on the row — that is exactly
-    // what a `no_repeat_period` failure looks like. Confirming from them is the
-    // same claim the cheap path makes from one tick frame, on the same test and
-    // the same budget, so the page keeps saying "now playing" for a song the
-    // tracker can still see. What stays withheld is the row: no play is written
-    // and `currentUnit` does not move, because confirming a song is not the
-    // same as reading a new one.
+    /*
+     * A burst that will not STITCH has still READ the marquee, and its last
+     * frames may plainly show the song already on the row — that is exactly
+     * what a `no_repeat_period` failure looks like. Confirming from them is the
+     * same claim the cheap path makes from one tick frame, on the same test and
+     * the same budget, so the page keeps saying "now playing" for a song the
+     * tracker can still see. What stays withheld is the row: no play is written
+     * and `currentUnit` does not move, because confirming a song is not the
+     * same as reading a new one.
+     */
     const stillShowing =
       currentUnit !== null &&
       burstStillShows(fragments, currentUnit, CONFIRM_TAIL_FRAMES, CONFIG.fuzzyMaxEdits);
     if (stillShowing) writeConfirmedFlag(CONFIG.stateDir);
-    // The fragments are the only evidence of WHY the stitcher failed, and
-    // nothing stores them now — so they go in the line, on EVERY failure. The
-    // frame files are overwritten by the next burst and no row is written for
-    // an unstitchable song, so a streak that logged only its reason would
-    // leave a song unrecoverable the moment the stream's DVR window closes.
+    /*
+     * The fragments are the only evidence of WHY the stitcher failed, and
+     * nothing stores them now — so they go in the line, on EVERY failure. The
+     * frame files are overwritten by the next burst and no row is written for
+     * an unstitchable song, so a streak that logged only its reason would
+     * leave a song unrecoverable the moment the stream's DVR window closes.
+     */
     log(
       `anomaly low_confidence_stitch (${res.reason}) streak ${failedStitchStreak}` +
         ` — keeping current song (still showing: ${stillShowing})` +
         ` fragments=${JSON.stringify(fragments)}` +
         ` tickText=${JSON.stringify(text)}`,
     );
-    // A repeatedly unstitchable song stays OFF the row. A single unvoted
-    // fragment is the weakest evidence the burst produced, at the moment the
-    // OCR is demonstrably worst — structure alone (one " — ", 3 chars a side)
-    // does not distinguish a credit from noise. The fragments are in the
-    // journal, where the operator is; the row stays silent rather than wrong.
+    /*
+     * A repeatedly unstitchable song stays OFF the row. A single unvoted
+     * fragment is the weakest evidence the burst produced, at the moment the
+     * OCR is demonstrably worst — structure alone (one " — ", 3 chars a side)
+     * does not distinguish a credit from noise. The fragments are in the
+     * journal, where the operator is; the row stays silent rather than wrong.
+     */
     return;
   }
   failedStitchStreak = 0;
@@ -264,10 +272,12 @@ async function tick(): Promise<void> {
     return;
   }
 
-  // The stitcher's confidence is not stored: nothing reads it back, and the
-  // page deliberately shows no confidence marker (a viewer cannot act on one).
-  // It still sets the dedup budget above, and it is reported here in full —
-  // reason AND fragments — because the journal is the forensic record (D9).
+  /*
+   * The stitcher's confidence is not stored: nothing reads it back, and the
+   * page deliberately shows no confidence marker (a viewer cannot act on one).
+   * It still sets the dedup budget above, and it is reported here in full —
+   * reason AND fragments — because the journal is the forensic record (D9).
+   */
   if (!res.confident) {
     log(
       `anomaly low_confidence_stitch (${res.reason})` +

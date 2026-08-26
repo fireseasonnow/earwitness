@@ -28,10 +28,12 @@ describe("fixture 3 — burst after the transition", () => {
 });
 
 describe("fixture 5 — unstitchable burst", () => {
-  // Kept as a failing burst on purpose: it is what `burstStillShows` exists
-  // for. If a stitcher improvement ever recovers this one, that is good news
-  // and this test is the notice to go find another failure to hold the
-  // fingerprint test honest.
+  /*
+   * Kept as a failing burst on purpose: it is what `burstStillShows` exists
+   * for. If a stitcher improvement ever recovers this one, that is good news
+   * and this test is the notice to go find another failure to hold the
+   * fingerprint test honest.
+   */
   test("readable frames are not enough — the loop is unrecoverable", async () => {
     const frags = await loadFixture("fixture5-unstitchable-burst.txt");
     const res = stitch(frags);
@@ -68,16 +70,18 @@ describe("robustness", () => {
 });
 
 describe("double-period rotations", () => {
-  // Fixture 4 is a burst whose two loops span different column counts (jittery
-  // scroll, dropped glyphs), so period detection reaches for their sum and the
-  // stitched unit holds the song TWICE. It shipped that to the page on
-  // 2026-08-23 as `Ben Seren n walls are humming Ben Seretan — walls are
-  // humming`: the ` — ` count cannot catch it, because the rotation degrades
-  // the duplicate separator and leaves exactly one.
-  //
-  // The assertion is the property, not a string: a unit may never contain the
-  // song twice. Refusing is a fine outcome — the caller then falls back to the
-  // best single fragment, which is closer to the truth than a doubled name.
+  /*
+   * Fixture 4 is a burst whose two loops span different column counts (jittery
+   * scroll, dropped glyphs), so period detection reaches for their sum and the
+   * stitched unit holds the song TWICE. It shipped that to the page on
+   * 2026-08-23 as `Ben Seren n walls are humming Ben Seretan — walls are
+   * humming`: the ` — ` count cannot catch it, because the rotation degrades
+   * the duplicate separator and leaves exactly one.
+   *
+   * The assertion is the property, not a string: a unit may never contain the
+   * song twice. Refusing is a fine outcome — the caller then falls back to the
+   * best single fragment, which is closer to the truth than a doubled name.
+   */
   const timesRepeated = (unit: string | null): number =>
     unit === null ? 0 : (unit.toLowerCase().match(/humming/g) ?? []).length;
 

@@ -10,13 +10,15 @@ export const CONFIG = {
   crop: "crop=520:70:1390:30", // credit ticker at 1080p
 
   tickIntervalMs: 30_000,
-  // Must cover TWO full marquee loops, not one. Period detection folds votes
-  // modulo the period, so a burst covering 1.26 loops leaves only the overlap
-  // columns with a second sample — ~15, exactly MIN_PERIOD_SAMPLES, which is
-  // why no_repeat_period dominated on long credits and never appeared on short
-  // ones. Measured 2026-08-25: the marquee scrolls ~4 chars/s, so a 49-char
-  // unit ("Siren and the Sea — 10 - The Large Floating Vessel") loops in ~14 s
-  // including the hold. 30 s clears two loops for anything up to ~55 chars.
+  /*
+   * Must cover TWO full marquee loops, not one. Period detection folds votes
+   * modulo the period, so a burst covering 1.26 loops leaves only the overlap
+   * columns with a second sample — ~15, exactly MIN_PERIOD_SAMPLES, which is
+   * why no_repeat_period dominated on long credits and never appeared on short
+   * ones. Measured 2026-08-25: the marquee scrolls ~4 chars/s, so a 49-char
+   * unit ("Siren and the Sea — 10 - The Large Floating Vessel") loops in ~14 s
+   * including the hold. 30 s clears two loops for anything up to ~55 chars.
+   */
   burstSeconds: 30,
   /**
    * Two frames a second, not one.
@@ -44,11 +46,13 @@ export const CONFIG = {
    */
   confirmTailSeconds: 10,
 
-  // `yt-dlp -g` returns a media-playlist URL, not a durable stream URL: it is a
-  // snapshot of a sliding window of 2 s segments and stops working after ~25-30 s
-  // ("Error when loading first segment"), whatever the 6 h expiry in its
-  // signature claims. Keep this WELL under the tick interval or every tick
-  // pays a failed capture before re-resolving.
+  /*
+   * `yt-dlp -g` returns a media-playlist URL, not a durable stream URL: it is a
+   * snapshot of a sliding window of 2 s segments and stops working after ~25-30 s
+   * ("Error when loading first segment"), whatever the 6 h expiry in its
+   * signature claims. Keep this WELL under the tick interval or every tick
+   * pays a failed capture before re-resolving.
+   */
   urlMaxAgeMs: 20_000,
   emptyOcrThreshold: 3, // consecutive empty ticks before one log line
 
@@ -56,12 +60,14 @@ export const CONFIG = {
   fuzzyMaxEdits: 2, // fingerprint fuzzy-substring budget
   creditDedupMaxEdits: 2, // credit dedup budget
 
-  // Forensics live in the journal, not in a stored trail, so there
-  // is no trail size to configure here. Set SystemMaxUse generously on the host:
-  // the journal is the only record, and it is bounded by size, not by count.
-  // EARWITNESS_STATE names a DIRECTORY holding plays.json and live.flag. Its
-  // default lives in the shared module, because the web app must resolve the
-  // same one and a copy is an agreement nothing enforces.
+  /*
+   * Forensics live in the journal, not in a stored trail, so there
+   * is no trail size to configure here. Set SystemMaxUse generously on the host:
+   * the journal is the only record, and it is bounded by size, not by count.
+   * EARWITNESS_STATE names a DIRECTORY holding plays.json and live.flag. Its
+   * default lives in the shared module, because the web app must resolve the
+   * same one and a copy is an agreement nothing enforces.
+   */
   stateDir: resolveStateDir(),
   frameDir: join(tmpdir(), "earwitness-frames"),
 

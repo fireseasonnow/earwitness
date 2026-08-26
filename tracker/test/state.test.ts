@@ -113,10 +113,12 @@ describe("consecutive duplicate suppression", () => {
 });
 
 describe("canonical credit", () => {
-  // The invariant that lost its structural guarantee when the track table went:
-  // every play of one song must carry ONE spelling, or the page shows two songs
-  // where there is one. Nothing in the shape enforces it, and a violation looks
-  // exactly like correct output, so it is tested directly.
+  /*
+   * The invariant that lost its structural guarantee when the track table went:
+   * every play of one song must carry ONE spelling, or the page shows two songs
+   * where there is one. Nothing in the shape enforces it, and a violation looks
+   * exactly like correct output, so it is tested directly.
+   */
   const SERETAN = "Ben Seretan — walls are humming";
   const JITTERED = "Ben Seretan — walls are humrning"; // 2 edits
 
@@ -402,10 +404,12 @@ describe("live flag", () => {
 });
 
 describe("rotation-invariant dedup", () => {
-  // The stitcher GUESSES where the marquee loop starts; when the ♪ separator
-  // OCRs as a plain space nothing in the burst distinguishes the real boundary
-  // from a word gap. Levenshtein rates a rotation as maximally different, so
-  // three bursts of one song became three rows on 2026-08-23.
+  /*
+   * The stitcher GUESSES where the marquee loop starts; when the ♪ separator
+   * OCRs as a plain space nothing in the burst distinguishes the real boundary
+   * from a word gap. Levenshtein rates a rotation as maximally different, so
+   * three bursts of one song became three rows on 2026-08-23.
+   */
   const SERETAN = "Ben Seretan — walls are humming";
   const ROT_1 = "Seretan — walls are humming Ben";
   const ROT_2 = "humming Ben Seretan — walls are";
