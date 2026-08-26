@@ -358,7 +358,9 @@ accumulated when the new binary starts.
 ## Field toolkit
 
 All capture constants live in `tracker/src/config.ts`. Measured facts: crop
-`crop=520:70:1390:30` at 1080p; marquee scrolls ≈ 4 chars/s with a ~1–2 s hold
+`crop=520:46:1390:42` at 1080p (glyphs occupy y 52-82; the scene's dotted
+terrain reaches y 106, and the crop stops at 87 to stay clear of it); marquee
+scrolls ≈ 4 chars/s with a ~1–2 s hold
 at the unit start each loop; the ♪ glyph between loop repetitions OCRs as `C`,
 `¢¢`, `dd`, a plain space, or nothing; song transitions are instant text swaps
 (empty OCR = capture hiccup, not a transition).
@@ -369,17 +371,17 @@ at the unit start each loop; the ♪ glyph between loop repetitions OCRs as `C`,
 URL=$(yt-dlp -g 'https://www.youtube.com/@claude/live')
 
 # single tick by hand: one cropped frame + OCR
-ffmpeg -loglevel error -i "$URL" -frames:v 1 -vf "crop=520:70:1390:30" -y tick.png \
+ffmpeg -loglevel error -i "$URL" -frames:v 1 -vf "crop=520:46:1390:42" -y tick.png \
   && tesseract tick.png stdout --psm 7
 
 # burst: two full marquee loops (stitcher input, as the tracker takes it)
-ffmpeg -loglevel error -t 30 -i "$URL" -vf "crop=520:70:1390:30,fps=2" -y tick_%02d.png
+ffmpeg -loglevel error -t 30 -i "$URL" -vf "crop=520:46:1390:42,fps=2" -y tick_%02d.png
 
 # fair A/B of any filter change: record once, apply filters to identical frames
 ffmpeg -loglevel error -t 12 -i "$URL" -c copy -y sample.ts
 
 # long watch (transitions, drift): 8 min @ 0.5 fps
-ffmpeg -loglevel error -t 480 -i "$URL" -vf "crop=520:70:1390:30,fps=1/2" -y t_%03d.png
+ffmpeg -loglevel error -t 480 -i "$URL" -vf "crop=520:46:1390:42,fps=1/2" -y t_%03d.png
 ```
 
 **If the overlay ever moves or is redesigned**, grab a full frame and
@@ -389,6 +391,29 @@ re-locate the ticker, then update `crop` in `tracker/src/config.ts`:
 ffmpeg -loglevel error -i "$URL" -frames:v 1 -y frame.png
 ```
 
+**Row profile — where the glyphs sit, and where the terrain reaches.** The crop
+has two bounds to satisfy, and neither is guessable from a screenshot: it must
+contain every glyph, and it must exclude the scene's drifting halftone terrain.
+Collapse each frame to one column of row averages and read both off it. Do this
+on the LAPTOP against a recorded sample, not on the server — 300 tesseract calls
+will starve the tracker on a four-core box.
+
+```bash
+ffmpeg -loglevel error -t 150 -i "$URL" -c copy -y sample.ts   # record once
+ffmpeg -loglevel error -i sample.ts   -vf "crop=520:200:1390:0,fps=2,format=gray,scale=1:200:flags=area"   -f rawvideo -pix_fmt gray -y rows.raw
+python3 - <<'"'"'EOF'"'"'
+d = open("rows.raw", "rb").read(); H = 200
+tops, bots, terrain = [], [], []
+for i in range(len(d) // H):
+    p = d[i * H:(i + 1) * H]
+    glyph = [y for y in range(40, 105) if p[y] < 250]
+    below = [y for y in range(95, 200) if p[y] < 250]
+    if glyph: tops.append(min(glyph)); bots.append(max(glyph))
+    if below: terrain.append(min(below))
+print("glyphs   y", min(tops), "..", max(bots))
+print("terrain reaches y", min(terrain))
+EOF
+```
 
 ## Tests
 

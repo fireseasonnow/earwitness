@@ -7,7 +7,33 @@ import { resolveStateDir } from "@earwitness/shared";
 // the full-frame command in the README and update `crop` here.
 export const CONFIG = {
   livePageUrl: "https://www.youtube.com/@claude/live",
-  crop: "crop=520:70:1390:30", // credit ticker at 1080p
+  /**
+   * The credit ticker at 1080p — a band around the text line, and no taller.
+   *
+   * The stream is an animated scene, and its dotted halftone terrain DRIFTS
+   * THROUGH this band from below. When it reaches the crop, tesseract reads the
+   * dots as characters and the fragment becomes junk ("iy ait Nodes nt k"); a
+   * burst peppered with those loses its repeat period, and the junk frames also
+   * fail to align, which pushes an otherwise good half over the
+   * `many_fragments_dropped` bar. Filtering cannot undo it — measured
+   * 2026-08-26, threshold, median, erosion, opening and removegrain all left a
+   * polluted frame unreadable (best 11% recovered, against 6% for no filter at
+   * all), because the dots are a dense structured band and not sparse noise.
+   * Geometry is the only lever: keep them out.
+   *
+   * Measured over 300 frames that day: the glyphs live in y 52-82 and the
+   * terrain tops out at y 106. This is y 42-87 — ten rows above the tallest
+   * glyph seen, five below the deepest descender, and 19 rows of clearance
+   * under the bottom edge where the old crop (y 30-99) had 7. The top margin is
+   * free, so it stays generous: nothing intrudes from above. On identical
+   * recorded frames spanning three songs this read 150/150 against the old
+   * crop's 146/150.
+   *
+   * If the overlay ever moves, re-derive BOTH bounds — the glyph envelope and
+   * the terrain's reach — with the row-profile command in the README. Do not
+   * simply re-centre on the text.
+   */
+  crop: "crop=520:46:1390:42", // credit ticker at 1080p
 
   tickIntervalMs: 30_000,
   /*
