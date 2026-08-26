@@ -174,8 +174,19 @@ is refused, which is what keeps a fold that came out a period short off the row.
 Every result from this path is low-confidence and carries `burst_split` into the
 journal.
 
+**Where the burst is cut.** Halving it is only right when the change happens to
+sit at the midpoint. `transitionIndex` finds where it actually sits, by scoring
+every cut on how little the trigrams before it share with those after: within one
+song both sides read the same credit and the score stays high everywhere, so no
+transition is reported and the midpoint is used exactly as before. Adjacent-frame
+similarity was tried first and is not usable — OCR drops whole frames to noise,
+and its minima land mid-song. The cut is then searched a few frames PAST the
+transition, because the frames catching the marquee mid-redraw are degenerate and
+cost the later half its repeat period.
 
-Of the 62 bursts that failed on 2026-08-26, this all recovers 30. The rest place
+Of the 62 bursts that failed on 2026-08-26, this all recovers 30, and the
+transition-aware cut adds 3 more on that day's 85 recorded failures — including
+the 12:03 straddle that lost `Keen Collective — Beginnings`. The rest place
 too few frames to span two loops of the marquee — their consensus is usually
 readable, which is the standing hint that the next gain is in the OCR (the crop
 goes to tesseract unprocessed, over a dotted background) rather than in here.

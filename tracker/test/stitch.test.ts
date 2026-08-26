@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { rotationDistance } from "../src/fingerprint";
 import { stitch } from "../src/stitch";
 import { loadFixture } from "./helpers";
 
@@ -85,6 +86,34 @@ describe("a burst that straddles a song change", () => {
     // compressed at the loop wrap and the fold came out a period short.
     const frags = await loadFixture("fixture11-compressed-wrap.txt");
     expect(stitch(frags).unit).toBeNull();
+  });
+
+  test("fixture 12 — a transition at frame 22, nowhere near the midpoint", async () => {
+    /*
+     * The real 2026-08-26 12:03 failure: the burst caught `Keen Collective —
+     * Beginnings` scrolling into `Ben Seretan — kokosing`, and halving it at
+     * frame 29 put both songs in the later half. Cutting at the transition the
+     * burst actually contains recovers the newer one — as a rotation, which
+     * `recordPlay` resolves against the song already logged that day.
+     */
+    const frags = await loadFixture("fixture12-late-transition.txt");
+    const res = stitch(frags);
+    expect(res.reason).toContain("burst_split");
+    expect(res.confident).toBe(false);
+    expect(rotationDistance("Ben Seretan — kokosing", res.unit!.toLowerCase(), 4)).toBeLessThanOrEqual(4);
+  });
+
+  test("a single-song burst is never cut at a transition it does not have", async () => {
+    // Fixtures 5, 9 and 11 are the noisiest single-song bursts on record, and
+    // the split must not manufacture a boundary inside one: a cut that lands
+    // mid-credit stitches a truncation, and a truncation goes on the row.
+    for (const f of [
+      "fixture5-unstitchable-burst.txt",
+      "fixture9-smeared-repeat.txt",
+      "fixture11-compressed-wrap.txt",
+    ]) {
+      expect(stitch(await loadFixture(f)).unit).toBeNull();
+    }
   });
 
   test("a burst too short to halve is left alone", () => {

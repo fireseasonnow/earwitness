@@ -19,7 +19,7 @@
  *     reported as low-confidence to the journal, and `resolveTrack` matches
  *     rotations, so an arbitrary cut costs a name and not a duplicate row.
  */
-import { editDistance } from "./normalize";
+import { editDistance, normalize } from "./normalize";
 
 export interface StitchResult {
   /** Canonical `Artist — Title` unit (original case), or null if stitching failed. */
@@ -77,6 +77,30 @@ const PAUSE_TEXT_MIN_LEN = 15;
  * for 2-4 frames, so 2 still clears it comfortably.
  */
 const PAUSE_MAX_EDITS = 2;
+
+/*
+ * Locating the song change inside a straddled burst (`transitionIndex`).
+ * Fragments each side of the cut must be enough to stitch from, and the two
+ * sides must genuinely look like different text: measured 2026-08-26, a real
+ * straddle scores 0.02 (fixture 10) and 0.23 (fixture 12) while single-song
+ * bursts — including the noisiest, fixtures 5, 9 and 11 — never dropped below
+ * 0.33. Trigrams rather than whole frames because the marquee is scrolling:
+ * the same credit appears at a different offset in every frame, and only the
+ * character runs survive that.
+ */
+const SPLIT_MIN_SIDE = 8;
+const SPLIT_MAX_OVERLAP = 0.3;
+const SPLIT_GRAM = 3;
+/*
+ * A song change is not a knife edge. The marquee swaps its text between one
+ * frame and the next, and the frames around that swap catch it mid-redraw:
+ * fixture 12 changes song at frame 22 and yields four degenerate "Ben a -
+ * kokosing" reads before the new credit renders whole, which is enough to cost
+ * the later half its repeat period. So the cut is searched forward from the
+ * detected transition rather than pinned to it — 6 frames is 3 s at 2 fps,
+ * past any swap, and every candidate still has to clear the same bar below.
+ */
+const SPLIT_GUARD_FRAMES = 6;
 
 // The ♪ separator between marquee repetitions, as OCR actually renders it.
 const SPACE_RUN = / {2,}/; // ♪ rendered as nothing → collapsed gap
@@ -497,6 +521,49 @@ function stitchAligned(fragments: string[]): StitchResult {
   };
 }
 
+/** Trigrams of a group of fragments, as one bag. */
+function gramsOf(frags: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const f of frags) {
+    const t = normalize(f);
+    for (let i = 0; i + SPLIT_GRAM <= t.length; i++) out.add(t.slice(i, i + SPLIT_GRAM));
+  }
+  return out;
+}
+
+/**
+ * Where inside a straddled burst does the song change?
+ *
+ * Adjacent frames are the obvious place to look and the wrong one: OCR of this
+ * marquee drops whole frames to noise, so consecutive-frame similarity has
+ * minima all over a single-song burst — on 2026-08-26 it put fixture 12's
+ * break at frame 14 or 26, when the song actually changes at 22.
+ *
+ * Judging the two SIDES instead is stable, because every frame votes. The cut
+ * that splits the burst into its two songs is the one where the text before
+ * shares least with the text after; within one song every cut still has both
+ * sides reading the same credit, so the score stays high everywhere and no
+ * transition is reported.
+ *
+ * Returns null when nothing looks like a transition — the burst is one song
+ * that simply would not stitch, and cutting it is not the answer.
+ */
+function transitionIndex(frags: string[]): number | null {
+  if (frags.length < 2 * SPLIT_MIN_SIDE) return null;
+  let best: { cut: number; overlap: number } | null = null;
+  for (let cut = SPLIT_MIN_SIDE; cut <= frags.length - SPLIT_MIN_SIDE; cut++) {
+    const before = gramsOf(frags.slice(0, cut));
+    const after = gramsOf(frags.slice(cut));
+    if (before.size === 0 || after.size === 0) continue;
+    let shared = 0;
+    for (const g of before) if (after.has(g)) shared++;
+    const overlap = shared / Math.min(before.size, after.size);
+    if (best === null || overlap < best.overlap) best = { cut, overlap };
+  }
+  if (best === null || best.overlap > SPLIT_MAX_OVERLAP) return null;
+  return best.cut;
+}
+
 /**
  * A burst can straddle a song change, and then nothing explains all of it: the
  * frames hold two different credits, the alignment is fighting itself, and the
@@ -520,17 +587,37 @@ export function stitch(fragments: string[]): StitchResult {
   const whole = stitchAligned(fragments);
   if (whole.unit !== null || fragments.length < 2 * MIN_FRAGMENTS) return whole;
 
-  const mid = Math.floor(fragments.length / 2);
-  for (const half of [fragments.slice(mid), fragments.slice(0, mid)]) {
-    const res = stitchAligned(half);
-    if (res.unit === null || (res.reason ?? "").includes("many_fragments_dropped")) continue;
-    // Never confident: the caller widens the dedup budget, and the journal gets
-    // `burst_split` so a run of these is visible as what it is.
-    return {
-      ...res,
-      confident: false,
-      reason: [res.reason, "burst_split"].filter(Boolean).join(","),
-    };
+  /*
+   * The detected transition and the frames just after it, then the midpoint.
+   * The midpoint stays as a fallback because a cut has to beat the noise floor
+   * to be reported at all, and a burst whose transition is near the middle is
+   * served by it anyway. Nothing here fires on a single-song burst: no
+   * transition is detected, so only the midpoint is ever tried, exactly as
+   * before.
+   */
+  const t = transitionIndex(fragments);
+  const candidates: number[] = [];
+  if (t !== null) {
+    for (let d = 0; d <= SPLIT_GUARD_FRAMES; d += 2) {
+      if (fragments.length - (t + d) >= SPLIT_MIN_SIDE) candidates.push(t + d);
+    }
+  }
+  candidates.push(Math.floor(fragments.length / 2));
+  const cuts = candidates.filter((c, i, a) => a.indexOf(c) === i);
+  for (const cut of cuts) {
+    // The LATER half first: the tracker bursts because the marquee changed, so
+    // the newer song is the one on air and the one the row should carry.
+    for (const half of [fragments.slice(cut), fragments.slice(0, cut)]) {
+      const res = stitchAligned(half);
+      if (res.unit === null || (res.reason ?? "").includes("many_fragments_dropped")) continue;
+      // Never confident: the caller widens the dedup budget, and the journal gets
+      // `burst_split` so a run of these is visible as what it is.
+      return {
+        ...res,
+        confident: false,
+        reason: [res.reason, "burst_split"].filter(Boolean).join(","),
+      };
+    }
   }
   return whole;
 }
