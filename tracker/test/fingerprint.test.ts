@@ -4,6 +4,7 @@ import {
   burstStillShows,
   fuzzySubstringDistance,
   isSameSong,
+  marqueeStillReads,
 } from "../src/fingerprint";
 import { loadFixture } from "./helpers";
 
@@ -85,5 +86,50 @@ describe("burstStillShows — confirming from a burst the stitcher rejected", ()
   test("a tail longer than the burst is the burst, not an error", async () => {
     const frags = await loadFixture("fixture5-unstitchable-burst.txt");
     expect(burstStillShows(frags, currentUnit, 500)).toBe(true);
+  });
+});
+
+describe("marqueeStillReads — is the failed burst's song still on screen?", () => {
+  const RATIO = 0.4; // CONFIG.cooldownMatchRatio
+
+  test("most frames of a burst read as that same burst", async () => {
+    /*
+     * Held out one at a time, so nothing matches itself. This is the property
+     * the burst backoff needs: while the unstitchable song is still playing,
+     * ticks keep landing on it and the cooldown keeps being served.
+     *
+     * MOST, not all — and the bar is deliberately well under what was measured.
+     * Same-song frames scored 0.54 at p90 against the rest of their own burst
+     * on 2026-08-26, so roughly 85% clear a 0.40 ratio; 0.6 leaves room for a
+     * noisier burst than fixture 5 without going green on a broken matcher.
+     * A miss here costs one wasted re-burst, which is the cheap direction.
+     */
+    const frags = await loadFixture("fixture5-unstitchable-burst.txt");
+    const hits = frags.filter((f, i) =>
+      marqueeStillReads(f, frags.filter((_, j) => j !== i), RATIO),
+    ).length;
+    expect(hits / frags.length).toBeGreaterThan(0.6);
+  });
+
+  test("no frame of a DIFFERENT song reads as it", async () => {
+    // The half of the asymmetry that matters: a song the tracker has not read
+    // must never be mistaken for the one that failed, or the backoff goes on
+    // suppressing bursts through a song change and the play is lost.
+    const failed = await loadFixture("fixture5-unstitchable-burst.txt");
+    const others = [
+      ...(await loadFixture("fixture12-late-transition.txt")).slice(22),
+      ...(await loadFixture("fixture6-long-credit.txt")),
+      ...(await loadFixture("fixture2-clean-stitch.txt")),
+    ];
+    expect(others.some((f) => marqueeStillReads(f, failed, RATIO))).toBe(false);
+  });
+
+  test("no fragments to compare against is not a match", () => {
+    expect(marqueeStillReads("Orions Belte — Manual Shear", [], RATIO)).toBe(false);
+  });
+
+  test("too little text to trust is not a match", async () => {
+    const frags = await loadFixture("fixture5-unstitchable-burst.txt");
+    expect(marqueeStillReads("Owen", frags, RATIO)).toBe(false);
   });
 });

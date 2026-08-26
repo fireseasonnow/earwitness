@@ -63,6 +63,19 @@ export const CONFIG = {
   urlMaxAgeMs: 20_000,
   emptyOcrThreshold: 3, // consecutive empty ticks before one log line
 
+  /**
+   * How closely a tick must match a FAILED burst's frames to count as the same
+   * song, as a ratio of edit distance to length (`marqueeStillReads`).
+   *
+   * This gates the burst backoff, and the two errors are not symmetric: too
+   * high and a genuine song change is mistaken for the unstitchable song still
+   * playing, which is the failure that cost 122 minutes of blindness on
+   * 2026-08-26; too low and a pathological song is re-burst a few extra times,
+   * which costs CPU on the ~15% burst path and nothing else. Measured
+   * cross-song minimum that day was 0.43, so this sits below it.
+   */
+  cooldownMatchRatio: 0.4,
+
   minTickTextLen: 5, // shorter raw OCR output counts as an empty frame
   fuzzyMaxEdits: 2, // fingerprint fuzzy-substring budget
   creditDedupMaxEdits: 2, // credit dedup budget

@@ -21,7 +21,7 @@ import {
   writeConfirmedFlag,
   writeLiveFlag,
 } from "./src/state";
-import { burstStillShows, isSameSong } from "./src/fingerprint";
+import { burstStillShows, isSameSong, marqueeStillReads } from "./src/fingerprint";
 import { log } from "./src/log";
 import { normalize } from "./src/normalize";
 import { StreamUrl } from "./src/resolve";
@@ -64,6 +64,9 @@ let emptyStreak = 0;
 let captureFailStreak = 0;
 let failedStitchStreak = 0;
 let burstCooldownTicks = 0;
+// The frames of the burst that most recently failed to stitch — the reference
+// the cooldown below is judged against. Empty whenever no cooldown is owed.
+let failedBurstFragments: string[] = [];
 // null until the first tick, so a tracker that starts having last run yesterday
 // prunes immediately instead of waiting for a live midnight boundary (D3).
 let lastAmsDate: string | null = null;
@@ -100,6 +103,7 @@ function rolloverIfNeeded(): void {
   currentUnit = null;
   failedStitchStreak = 0;
   burstCooldownTicks = 0;
+  failedBurstFragments = [];
   if (lastAmsDate !== null) log(`rollover to ${today} — previous days pruned`);
   lastAmsDate = today;
 }
@@ -189,6 +193,7 @@ async function tick(): Promise<void> {
   if (currentUnit !== null && isSameSong(text, currentUnit, CONFIG.fuzzyMaxEdits)) {
     failedStitchStreak = 0;
     burstCooldownTicks = 0;
+    failedBurstFragments = [];
     // The marquee still reads as the song holding the newest row. This is the
     // ~85% path, so the page's claim that something is playing NOW rests on
     // evidence at most one tick old rather than on a guess about song length.
@@ -196,11 +201,39 @@ async function tick(): Promise<void> {
     return; // the ~85% path: same song, sleep
   }
 
-  // After failed stitches, back off instead of re-bursting every tick —
-  // pathological-OCR songs would otherwise burst and log on every tick.
+  /*
+   * After failed stitches, back off instead of re-bursting every tick —
+   * pathological-OCR songs would otherwise burst and log on every tick.
+   *
+   * The backoff is owed by ONE song, not by the clock. It used to suppress
+   * every burst while it ran, and because the cheap path above can only clear
+   * it by recognising the song already on the row, a change arriving mid-
+   * cooldown could not clear it either: the tracker went blind for 1-3 minutes
+   * at exactly the moment a new song needed reading. Songs run ~3 min, so that
+   * is a whole song lost per failure, and the next burst then landed mid-
+   * transition and failed too. On 2026-08-26 that cascade dropped 58 of 233
+   * changes — 32 of them at streak 2 or worse — and held the tracker blind for
+   * 122 minutes of the day.
+   *
+   * So the cooldown only holds while the marquee still reads as the burst that
+   * earned it. Anything else on screen is unread, and unread is what a burst is
+   * for.
+   */
   if (burstCooldownTicks > 0) {
-    burstCooldownTicks--;
-    return;
+    const sameSong =
+      failedBurstFragments.length === 0 ||
+      marqueeStillReads(text, failedBurstFragments, CONFIG.cooldownMatchRatio);
+    if (!sameSong) {
+      // A different song. The backoff has nothing to say about it.
+      burstCooldownTicks = 0;
+      failedStitchStreak = 0;
+      failedBurstFragments = [];
+    } else {
+      // Same song, or a burst that failed before it could align anything and so
+      // left no frames to compare — with no evidence either way, serve it out.
+      burstCooldownTicks--;
+      return;
+    }
   }
 
   // Burst path: mismatch (or startup with no current song).
@@ -220,6 +253,7 @@ async function tick(): Promise<void> {
   if (res.unit === null) {
     failedStitchStreak++;
     burstCooldownTicks = Math.min(6, 2 ** failedStitchStreak); // 2, 4, 6, 6…
+    failedBurstFragments = fragments;
     /*
      * A burst that will not STITCH has still READ the marquee, and its last
      * frames may plainly show the song already on the row — that is exactly
@@ -258,6 +292,7 @@ async function tick(): Promise<void> {
   }
   failedStitchStreak = 0;
   burstCooldownTicks = 0;
+  failedBurstFragments = [];
 
   // Resolve the credit first, then let the resolved identity decide whether this
   // is a new play — never a string comparison against `currentUnit`.

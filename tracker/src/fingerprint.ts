@@ -1,4 +1,4 @@
-import { normalize, trimEdges } from "./normalize";
+import { editDistance, normalize, trimEdges } from "./normalize";
 
 /**
  * Minimal edit distance between `needle` and any substring of `haystack`
@@ -88,4 +88,43 @@ export function burstStillShows(
   maxEdits?: number,
 ): boolean {
   return fragments.slice(-tailFrames).some((f) => isSameSong(f, unit, maxEdits));
+}
+
+/**
+ * Does this tick's marquee still read as the burst that just FAILED to stitch?
+ *
+ * The burst backoff in `tracker.ts` exists to stop a pathological-OCR song
+ * re-bursting on every tick. It has to know whether the thing on screen NOW is
+ * that same song, and it cannot ask `isSameSong`: that needs a canonical unit,
+ * and a failed stitch is precisely the case where there is none.
+ *
+ * So the failed burst's own fragments are the reference. Two tick frames of one
+ * song 30 s apart can share almost nothing — the marquee scrolls ~4 chars/s and
+ * a short credit loops several times in between, so the phase is effectively
+ * arbitrary — but a burst spans ~30 s at 2 fps and therefore holds EVERY phase
+ * of the loop. Whatever phase the new tick caught, some frame of that burst saw
+ * it too.
+ *
+ * The budget is a ratio, not a fixed edit count, because these are raw OCR of a
+ * half-legible marquee rather than the clean units `isSameSong` compares.
+ * Measured 2026-08-26 over fixtures 2, 5, 6, 7 and 12: a frame of the same song
+ * scores p50 0.11-0.26 against the rest of its own burst and 0.54 at p90, while
+ * frames of a DIFFERENT song never scored below 0.43 against any of them. The
+ * default sits at 0.40, under every cross-song minimum seen — the error it
+ * accepts is re-bursting a song it could have skipped, never going blind to a
+ * song it has not read.
+ */
+export function marqueeStillReads(
+  tickText: string,
+  fragments: string[],
+  maxRatio: number,
+): boolean {
+  const t = trimEdges(normalize(tickText));
+  if (t.length < 8) return false; // too little text to trust either way
+  for (const f of fragments) {
+    const x = trimEdges(normalize(f));
+    if (x.length < 8) continue;
+    if (editDistance(t, x) / Math.max(t.length, x.length) <= maxRatio) return true;
+  }
+  return false;
 }
