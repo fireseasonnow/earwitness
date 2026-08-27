@@ -1,13 +1,20 @@
 ---
 import "../styles/global.css";
 import { REFRESH_SECONDS } from "../lib/freshness";
+import { absolute, CARD, SITE_NAME } from "../lib/metadata";
 
 interface Props {
   title: string;
+  /** The unfurl and the search result. Words: `lib/metadata.ts`. */
+  description: string;
   /** Reload every tick so new plays appear live. Cadence: `lib/freshness.ts`. */
   autoRefresh?: boolean;
 }
-const { title, autoRefresh = false } = Astro.props;
+const { title, description, autoRefresh = false } = Astro.props;
+
+// The path and not the URL: `?utm_…` and `?via=…` arrivals are one page, and the
+// edge is already told to ignore the query in its cache key.
+const canonical = absolute(Astro.url.pathname);
 ---
 
 <html lang="en">
@@ -16,6 +23,24 @@ const { title, autoRefresh = false } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     {autoRefresh && <meta http-equiv="refresh" content={String(REFRESH_SECONDS)} />}
     <title>{title}</title>
+    <meta name="description" content={description} />
+
+    {/* Absolute, and built from `ORIGIN` rather than the request: this is also
+        what tells a crawler that `www` and the apex are one page. */}
+    <link rel="canonical" href={canonical} />
+
+    {/* The unfurl. X reads the `og:*` pair when no `twitter:*` twin is there;
+        the card type is the one tag it will not infer. */}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={absolute(CARD.path)} />
+    <meta property="og:image:width" content={String(CARD.width)} />
+    <meta property="og:image:height" content={String(CARD.height)} />
+    <meta property="og:image:alt" content={CARD.alt} />
+    <meta name="twitter:card" content="summary_large_image" />
 
     {/* The Pixel Note again — same 21 blocks as the header mark. */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

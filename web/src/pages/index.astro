@@ -2,6 +2,7 @@
 import DayView from "../components/DayView.astro";
 import Layout from "../layouts/Layout.astro";
 import { CACHE_CONTROL } from "../lib/freshness";
+import { PAGE_DESCRIPTION, PAGE_TITLE } from "../lib/metadata";
 
 export const prerender = false;
 
@@ -10,6 +11,6 @@ export const prerender = false;
 Astro.response.headers.set("Cache-Control", CACHE_CONTROL);
 ---
 
-<Layout title="Earwitness" autoRefresh>
+<Layout title={PAGE_TITLE} description={PAGE_DESCRIPTION} autoRefresh>
   <DayView />
 </Layout>

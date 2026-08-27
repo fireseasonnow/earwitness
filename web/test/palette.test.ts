@@ -356,12 +356,14 @@ describe("palette — no colour without a call site", () => {
 });
 
 /**
- * Two colours cannot reference the theme — a `<meta>` value and a standalone
- * SVG — so they are literals, and literals drift.
+ * Three files cannot reference the theme — a `<meta>` value and two standalone
+ * SVGs — so they carry literals, and literals drift.
  */
-describe("palette — the two literals outside the theme", () => {
+describe("palette — the literals outside the theme", () => {
   const layout = readFileSync(join(WEB, "src", "layouts", "Layout.astro"), "utf8");
   const favicon = readFileSync(join(WEB, "public", "favicon.svg"), "utf8");
+  /** The social card's source. What ships is the PNG rendered from it. */
+  const card = readFileSync(join(WEB, "..", "docs", "og-card.svg"), "utf8");
 
   test("the theme-color meta tag is paper", () => {
     const value = /name="theme-color"\s+content="(#[0-9a-f]{6})"/.exec(layout)?.[1];
@@ -373,6 +375,26 @@ describe("palette — the two literals outside the theme", () => {
     // chrome, and the scene has a tier for exactly that.
     expect(/fill="(#[0-9a-f]{6})"/.exec(favicon)?.[1]).toBe(SHADED_SIDE);
     expect(Object.keys(SAMPLED)).toContain(SHADED_SIDE);
+  });
+
+  /**
+   * The card is a rendered PNG on someone else's server by the time it is seen,
+   * so its colours can only be checked here, in the source it came from. Every
+   * one of them is a tier the page already sets — the card is the header drawn
+   * large, not a second look with a palette of its own.
+   */
+  test("the card spends only colours the theme already has", () => {
+    const spent = [...card.matchAll(/#[0-9a-f]{6}/g)].map((m) => m[0]);
+    const theme = TOKENS.map((t) => resolve(t.value));
+    expect(spent.length).toBeGreaterThanOrEqual(4);
+    for (const value of spent) expect(theme, `og-card.svg spends ${value}`).toContain(value);
+  });
+
+  test("it draws the mark in the header's tier, not the favicon's", () => {
+    // The card sits on the page's own paper, where the lit side is the tier.
+    const fills = [...card.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]!);
+    expect(fills).toContain(resolve("var(--color-terra)"));
+    expect(fills).not.toContain(SHADED_SIDE);
   });
 });
 

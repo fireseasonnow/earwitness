@@ -1,0 +1,175 @@
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  absolute,
+  CARD,
+  DESCRIPTION_BUDGET,
+  ORIGIN,
+  PAGE_DESCRIPTION,
+  PAGE_TITLE,
+  SITE_NAME,
+} from "../src/lib/metadata";
+
+/**
+ * The head is the only part of this page a stranger reads before deciding
+ * whether to open it, and nothing else in the build looks at it: a description
+ * that never reaches the markup renders exactly like one that does, and no
+ * screenshot at any width would show the difference.
+ *
+ * Four things are held here:
+ *
+ *   the BUDGET     a description longer than a result or an unfurl will show is
+ *                  a sentence finished for nobody
+ *   the DISCLAIMER the unfurl reaches people who never open the page, so it
+ *                  names the station and denies the affiliation like the footer
+ *   the CARD       the dimensions in the head are the PNG's own, or a scraper
+ *                  lays out a frame the image does not fill
+ *   the CALL SITES the words and the origin are in `lib/metadata.ts`, or the
+ *                  head and the config quietly grow copies of them
+ */
+
+const PACKAGE = join(import.meta.dir, "..");
+const WEB = join(PACKAGE, "src");
+const layoutSrc = readFileSync(join(WEB, "layouts", "Layout.astro"), "utf8");
+const indexSrc = readFileSync(join(WEB, "pages", "index.astro"), "utf8");
+const configSrc = readFileSync(join(PACKAGE, "astro.config.mjs"), "utf8");
+
+/**
+ * This site's hostname typed into a file instead of taken from `ORIGIN`, `www.`
+ * or not. Built from `ORIGIN` so the guard has no copy of the domain either, and
+ * narrow to this host on purpose: the footer's GitHub link and the font CDN are
+ * absolute URLs that belong where they are.
+ */
+const HOSTNAME_LITERAL = new RegExp(
+  `https?://[\\w.-]*${new URL(ORIGIN).hostname.replaceAll(".", "\\.")}`,
+);
+
+describe("the description is written for where it is read", () => {
+  test("it fits what a search result and an unfurl will show", () => {
+    expect(PAGE_DESCRIPTION.length).toBeLessThanOrEqual(DESCRIPTION_BUDGET);
+  });
+
+  /** Truncation aside, a fragment reads as a mistake wherever it lands. */
+  test("it is whole sentences", () => {
+    expect(PAGE_DESCRIPTION.trim()).toBe(PAGE_DESCRIPTION);
+    expect(PAGE_DESCRIPTION.endsWith(".")).toBe(true);
+  });
+
+  /**
+   * The footer's two claims, in the one place a reader meets before the page.
+   * The station, because "play log" alone says nothing; the denial, because the
+   * name in the sentence above it is Anthropic's.
+   */
+  test("it names the station and denies the affiliation", () => {
+    expect(PAGE_DESCRIPTION).toContain("Claude FM");
+    expect(PAGE_DESCRIPTION).toContain("not affiliated with Anthropic");
+  });
+});
+
+describe("the title says whose log this is", () => {
+  test("it carries the wordmark and the station", () => {
+    expect(PAGE_TITLE).toContain(SITE_NAME);
+    expect(PAGE_TITLE).toContain("Claude FM");
+  });
+});
+
+/**
+ * A card is fetched by a scraper, from an absolute URL, over the scheme this
+ * site actually serves — three things the request cannot supply, so they come
+ * from `ORIGIN` and are checked here rather than discovered in a debugger.
+ */
+describe("the origin is absolute, https, and stated once", () => {
+  test("it is an https origin and nothing more", () => {
+    const url = new URL(ORIGIN);
+    expect(url.protocol).toBe("https:");
+    expect(url.pathname).toBe("/");
+    // A trailing slash or a path would make `absolute` build a URL under it.
+    expect(ORIGIN.endsWith("/")).toBe(false);
+  });
+
+  test("absolute() puts a path on it", () => {
+    expect(absolute("/")).toBe(`${ORIGIN}/`);
+    expect(absolute(CARD.path)).toBe(`${ORIGIN}${CARD.path}`);
+  });
+
+  /** Two copies of a domain is how one of them goes stale. */
+  test("astro.config.mjs takes `site` from here rather than repeating it", () => {
+    expect(configSrc).toContain("ORIGIN");
+    expect(configSrc).toContain("site: ORIGIN");
+    expect(HOSTNAME_LITERAL.test(configSrc)).toBe(false);
+    expect(HOSTNAME_LITERAL.test(layoutSrc)).toBe(false);
+  });
+});
+
+/**
+ * The card the platforms fetch is a rendered artifact, not source, so nothing in
+ * the build would notice it missing, stale in size, or replaced by a crop.
+ */
+describe("the card in the head is the card on disk", () => {
+  const png = readFileSync(join(PACKAGE, "public", CARD.path));
+
+  test("it is a PNG of the dimensions the head declares", () => {
+    // IHDR: width and height are the two big-endian words after the signature.
+    expect(png.subarray(1, 4).toString()).toBe("PNG");
+    expect(png.readUInt32BE(16)).toBe(CARD.width);
+    expect(png.readUInt32BE(20)).toBe(CARD.height);
+  });
+
+  /**
+   * 1.91:1 is the frame every unfurl crops to. A card at another ratio is not
+   * broken, it is cropped — which takes the wordmark off centre and is the kind
+   * of thing nobody sees until it is on someone else's timeline.
+   */
+  test("it is the ratio the platforms crop to", () => {
+    // 1200x630 is 1.905, which is the frame as everyone ships it.
+    expect(Math.abs(CARD.width / CARD.height - 1.91)).toBeLessThan(0.01);
+  });
+
+  test("the head declares it whole: URL, both numbers, and alt text", () => {
+    expect(layoutSrc).toContain('property="og:image" content={absolute(CARD.path)}');
+    expect(layoutSrc).toContain('property="og:image:width" content={String(CARD.width)}');
+    expect(layoutSrc).toContain('property="og:image:height" content={String(CARD.height)}');
+    expect(layoutSrc).toContain('property="og:image:alt" content={CARD.alt}');
+    // The large card is the point of having one at all.
+    expect(layoutSrc).toContain('name="twitter:card" content="summary_large_image"');
+    expect(CARD.alt.length).toBeGreaterThan(20);
+  });
+});
+
+/**
+ * Every test above passes while the head carries a literal of its own, or
+ * carries nothing at all, which is the whole failure this file exists to
+ * prevent — so both sources are asserted directly.
+ */
+describe("the head takes its words from this module", () => {
+  /** A title or description typed into the markup instead of imported. */
+  const HARDCODED_WORDS = /(?:title|description)="/;
+
+  test("index.astro passes the constants and no words of its own", () => {
+    expect(indexSrc).toContain("PAGE_TITLE");
+    expect(indexSrc).toContain("PAGE_DESCRIPTION");
+    expect(HARDCODED_WORDS.test(indexSrc)).toBe(false);
+  });
+
+  test("Layout.astro renders both into the head, and into the unfurl", () => {
+    expect(layoutSrc).toContain("<title>{title}</title>");
+    expect(layoutSrc).toContain('name="description" content={description}');
+    expect(layoutSrc).toContain('property="og:title" content={title}');
+    expect(layoutSrc).toContain('property="og:description" content={description}');
+    expect(layoutSrc).toContain("SITE_NAME");
+  });
+
+  test("the canonical and og:url are the same absolute URL, built here", () => {
+    expect(layoutSrc).toContain("absolute(Astro.url.pathname)");
+    expect(layoutSrc).toContain('rel="canonical" href={canonical}');
+    expect(layoutSrc).toContain('property="og:url" content={canonical}');
+  });
+
+  test("the guards would catch either violation", () => {
+    // A guard whose pattern cannot match a real regression passes forever.
+    expect(HARDCODED_WORDS.test('<Layout title="Earwitness" autoRefresh>')).toBe(true);
+    expect(HOSTNAME_LITERAL.test(`site: "${ORIGIN}",`)).toBe(true);
+    expect(HOSTNAME_LITERAL.test("site: ORIGIN,")).toBe(false);
+  });
+});

@@ -73,6 +73,11 @@ whatever the host already runs. They must live on the **same host** and resolve
 the **same** `EARWITNESS_STATE` directory, on persistent storage and outside the
 checkout so a redeploy cannot discard the current day.
 
+The one deployment fact that is in the repo is the site's public URL, in
+`web/src/lib/metadata.ts`: the head has to state it in an absolute form no
+request can supply. Serving from another domain means changing that constant —
+see "What the head tells a crawler" under Design.
+
 ```bash
 bun install                  # workspace root: all three packages
 cd web && bun run build      # web needs a build; it is SSR
@@ -214,6 +219,43 @@ Two states the page deliberately does not have:
 - **The log is never truncated.** With no archive and no client-side JavaScript,
   a "172 earlier plays" label leads nowhere, so the day renders in full (a full
   day's ~450 rows is ≈150 KB) and the total stays in the log header.
+
+**What the head tells a crawler.** One page means one title and one description,
+and they are words, so they live in `web/src/lib/metadata.ts` and nowhere else —
+the same split `presentation.ts` keeps from `health.ts`. The description carries
+the Anthropic disclaimer as well as the footer does: a shared link is read by
+people who have not opened the page.
+
+`rel="canonical"`, `og:url` and `og:image` are absolute and cannot be built from
+the request: TLS terminates at the edge, and the node adapter reads the scheme
+off its own socket rather than `X-Forwarded-Proto`, so `Astro.url` says
+`http://…` for a page served over HTTPS. The origin is therefore a constant —
+`ORIGIN` in `metadata.ts`, which `site` in `astro.config.mjs` imports rather than
+repeating, so the domain has one definition. It is the apex: `www` also answers
+and nothing redirects it, so the canonical is what says the two are one page —
+**an edge redirect from `www` would settle it outright, and is worth adding.**
+The canonical carries the path only, so a `?utm_…` or `?via=…` arrival collapses
+onto the route, which is also how the edge is told to key its cache.
+
+**The card.** `web/public/og-card.png` at 1200×630, the frame every unfurl crops
+to, from the source in `docs/og-card.svg`. It is the header drawn large — mark,
+wordmark, tagline, the hero's halftone rule — and it names no song and no state:
+a platform caches the card for days, so a claim about the air would go stale
+inside someone else's timeline. Its colours are literals like the favicon's, and
+`palette.test.ts` holds each one to the token it copies. The dimensions are
+declared in the head so a scraper can lay the frame out before the image lands,
+and the test reads the PNG to keep them the file's own.
+
+**Redrawing the card** — edit the SVG, then re-render. Roboto Mono is fetched
+from the CDN while Chrome runs, so check the face in the output: the platform
+mono fallback renders without complaining.
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
+  --window-size=1200,630 --virtual-time-budget=5000 \
+  --screenshot=web/public/og-card.png "file://$PWD/docs/og-card.svg"
+```
 
 ## Reading the ticker
 
@@ -522,8 +564,11 @@ cd shared  && bun test   # parse, and the guard against a second parser
 cd web     && bun test   # health thresholds and their ORDER, the hero's words,
                          # the read side's three no-rows paths, the Amsterdam
                          # day filter, the palette's provenance, contrast and
-                         # call sites, and the guards keeping words out of
-                         # health.ts and the two day-boundary copies in step
+                         # call sites, the head's words and the budget they are
+                         # written to, the card's dimensions against the PNG on
+                         # disk, and the guards keeping words out of health.ts,
+                         # the domain to one definition, and the two
+                         # day-boundary copies in step
 ```
 
 Type checking is separate, and `bun run build` does not do it — Astro transpiles
