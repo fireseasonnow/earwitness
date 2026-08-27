@@ -4,6 +4,8 @@ An independent play log for [Claude FM](https://www.youtube.com/@claude/live),
 Anthropic's 24/7 stream. One always-on page showing what it has played **today**.
 Unofficial, and not affiliated with Anthropic.
 
+**On air at [earwitness.fyi](https://earwitness.fyi).**
+
 ![The page on air — hero, health line, and the day's log](docs/screenshot-1440.png)
 
 Two supervised processes on one host, no AI calls.
