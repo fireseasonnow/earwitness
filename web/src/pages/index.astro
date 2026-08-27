@@ -1,8 +1,13 @@
 ---
 import DayView from "../components/DayView.astro";
 import Layout from "../layouts/Layout.astro";
+import { CACHE_CONTROL } from "../lib/freshness";
 
 export const prerender = false;
+
+// Rendered per request, then held briefly by the edge so a crowd cannot reach
+// the origin once per view. Both halves of that budget: `lib/freshness.ts`.
+Astro.response.headers.set("Cache-Control", CACHE_CONTROL);
 ---
 
 <Layout title="Earwitness" autoRefresh>

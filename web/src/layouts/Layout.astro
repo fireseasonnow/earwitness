@@ -1,9 +1,10 @@
 ---
 import "../styles/global.css";
+import { REFRESH_SECONDS } from "../lib/freshness";
 
 interface Props {
   title: string;
-  /** Reload every 30 s (tracker tick cadence) so new plays appear live. */
+  /** Reload every tick so new plays appear live. Cadence: `lib/freshness.ts`. */
   autoRefresh?: boolean;
 }
 const { title, autoRefresh = false } = Astro.props;
@@ -13,7 +14,7 @@ const { title, autoRefresh = false } = Astro.props;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    {autoRefresh && <meta http-equiv="refresh" content="30" />}
+    {autoRefresh && <meta http-equiv="refresh" content={String(REFRESH_SECONDS)} />}
     <title>{title}</title>
 
     {/* The Pixel Note again — same 21 blocks as the header mark. */}
