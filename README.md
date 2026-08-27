@@ -231,11 +231,12 @@ the request: TLS terminates at the edge, and the node adapter reads the scheme
 off its own socket rather than `X-Forwarded-Proto`, so `Astro.url` says
 `http://…` for a page served over HTTPS. The origin is therefore a constant —
 `ORIGIN` in `metadata.ts`, which `site` in `astro.config.mjs` imports rather than
-repeating, so the domain has one definition. It is the apex: `www` also answers
-and nothing redirects it, so the canonical is what says the two are one page —
-**an edge redirect from `www` would settle it outright, and is worth adding.**
-The canonical carries the path only, so a `?utm_…` or `?via=…` arrival collapses
-onto the route, which is also how the edge is told to key its cache.
+repeating, so the domain has one definition. It is the apex, and a Cloudflare
+redirect rule 301s `www` onto it with the path and query intact — so the two
+hostnames are one page at the edge, one cache entry rather than two, before a
+request becomes a render. The canonical is the backstop under that rule. It
+carries the path only, so a `?utm_…` or `?via=…` arrival collapses onto the
+route, which is also how the edge is told to key its cache.
 
 **Nothing is blocked, and there is no sitemap.** `web/public/robots.txt` allows
 every crawler, AI ones included, and says why in the file — the short of it is
@@ -247,6 +248,15 @@ because the route is SSR ([withastro/astro#3682](https://github.com/withastro/as
 It is static in `public/` rather than a route: the answer is the same for every
 request, so serving it from the origin per request would buy nothing and cost a
 render.
+
+Cloudflare has an opinion about that file too. Its Content Signals policy
+prepends a comment preamble about `search`, `ai-input` and `ai-train` to whatever
+the origin serves — while the origin had no `robots.txt` at all, the edge
+synthesized the whole thing. So the file in `public/` is what the test checks and
+the edge's copy is what a crawler reads: `curl -s https://earwitness.fyi/robots.txt`
+after a deploy is the only thing that shows the difference. Comments cost nothing,
+but a `Content-Signal: ai-train=no` appearing there would contradict this
+repository's decision without changing a line of it.
 
 **The card.** 1200×630 in `web/public/`, the frame every unfurl crops to, from
 the source in `docs/og-card.svg`. It is the header drawn large — mark, wordmark,

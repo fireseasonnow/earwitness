@@ -27,10 +27,11 @@ export const SITE_NAME = "Earwitness";
  * Where this site is served, and the one place that says so — `site` in
  * `astro.config.mjs` imports it from here rather than repeating it.
  *
- * The apex, not `www`. Both hostnames answer and neither redirects to the
- * other, so the absolute canonical this builds is what tells a crawler the two
- * are one page; a redirect rule at the edge would settle it outright, and until
- * there is one, this is the claim.
+ * The apex, not `www`. A Cloudflare redirect rule 301s `www` here, path and
+ * query intact, so the two hostnames are one page before a request reaches this
+ * process at all — which is also what keeps the edge to one cache entry per
+ * render rather than one per hostname. The absolute canonical this builds is now
+ * the backstop under that rule, not the only thing making the claim.
  *
  * The rest of the deployment stays out of the repo by design — "Deploying it"
  * in the README — but a public URL is not deployment config: it is what the
