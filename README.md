@@ -6,8 +6,6 @@ Unofficial, and not affiliated with Anthropic.
 
 ![The page on air — hero, health line, and the day's log](docs/screenshot-1440.png)
 
-*Drawn at 1440. The plays above are seeded sample data, not a real capture.*
-
 Two supervised processes on one host, no AI calls.
 
 - `tracker/` — Bun + TypeScript loop: every 30 s it OCRs the credit ticker from
@@ -203,14 +201,25 @@ Put the new values in `global.css` with their measured contrast, and update
 SAMPLED in `web/test/palette.test.ts` — that list is the provenance record, and
 nothing may call itself sampled without being in it.
 
-**Redrawing the screenshot** — build `web/`, point `EARWITNESS_STATE` at a
-directory of seeded sample plays, start the server and screenshot the viewport at
-1440×952 with headless Chrome. The desktop width is the only one committed; the
-other two are checked and thrown away. Checking the phone width takes one trick:
-headless Chrome will not open a window narrower than 500px, so a 390px render has
-to happen inside a 390px-wide `<iframe>` — media queries follow the frame — or
-through the DevTools protocol. Screenshotting a 390px window instead silently
-renders at 500 and crops, which reads as an overflow bug that is not there.
+**Redrawing the screenshot** — the committed image is a real capture, so shoot a
+page backed by real state: run the tracker locally until the day's log has some
+depth, or forward the deployment's port (`ssh -N -L 4321:127.0.0.1:4321 HOST`).
+Seeded plays are not an option here — invented songs in the README read as a
+claim about what the stream played. Serve the BUILT app
+(`bun run build && bun run start`) or the deployment, never `astro dev`: the dev
+toolbar sits in the bottom of the frame. Then screenshot the viewport at 1440×952:
+
+```bash
+chrome --headless=new --hide-scrollbars --force-device-scale-factor=1 \
+  --window-size=1440,952 --screenshot=docs/screenshot-1440.png http://localhost:4321/
+```
+
+The desktop width is the only one committed; the other two are checked and thrown
+away. Checking the phone width takes one trick: headless Chrome will not open a
+window narrower than 500px, so a 390px render has to happen inside a 390px-wide
+`<iframe>` — media queries follow the frame — or through the DevTools protocol.
+Screenshotting a 390px window instead silently renders at 500 and crops, which
+reads as an overflow bug that is not there.
 
 Two states the page deliberately does not have:
 
