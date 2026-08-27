@@ -6,7 +6,7 @@
  * second pass scores against the first's finished consensus) → per-column
  * majority vote → detect the marquee repeat period → fold votes modulo the
  * period → collapse the fold if it came out holding whole copies → rotate the
- * cyclic unit at the loop boundary.
+ * cyclic unit at the loop boundary → check the cut back against the raw frames.
  *
  * The rotation point comes from (in priority order):
  *  1. a pause anchor — the marquee holds ~1–2 s at the unit start each loop,
@@ -18,6 +18,10 @@
  *     nothing to distinguish the real boundary from a word gap. The pick is
  *     reported as low-confidence to the journal, and `resolveTrack` matches
  *     rotations, so an arbitrary cut costs a name and not a duplicate row.
+ *
+ * All three say where the credit STARTS. How many columns the ♪ then takes off
+ * its end is the one thing the fold cannot report, so that is measured against
+ * the raw frames instead — see `frameCost`.
  */
 import { editDistance, normalize } from "./normalize";
 
@@ -293,6 +297,12 @@ function scanCandidates(doubled: string, period: number, re: RegExp): SeparatorC
 /**
  * Length of the separator run ending just before `idx` in `doubled`
  * (idx must be ≥ period so lookback never underflows). 0 → no separator.
+ *
+ * This is a FLOOR, not the answer: it reads the folded consensus, and the fold
+ * is exactly where the separator's width goes missing (see `frameCost`). It is
+ * still what decides whether there is a separator here at all — every non-zero
+ * return has a space in the column before `idx`, so a rotation that would cut
+ * mid-word is refused here and nowhere else.
  */
 function sepLenBefore(doubled: string, idx: number): number {
   // glyph island: space + 1–2 island chars + space, e.g. " C ", " dd "
@@ -306,6 +316,71 @@ function sepLenBefore(doubled: string, idx: number): number {
   let n = 0;
   while (n < 4 && doubled[idx - 1 - n] === " ") n++;
   return n;
+}
+
+/*
+ * The ♪ occupies a fixed few columns on screen; nothing wider than " dd " has
+ * been observed. The bound is on the SEPARATOR, so it also bounds how far a
+ * unit can shrink below the detected period.
+ */
+const MAX_SEP_LEN = 4;
+/*
+ * A frame is scored where its own placement put it, ± this many columns. The
+ * only reason to look off that column is that a candidate's period (unit +
+ * separator) differs from the fold's by up to MAX_SEP_LEN, plus one column of
+ * placement jitter. Scanning the whole period instead measured identical on all
+ * 253 bursts and cost 3× the time — and it would let a frame match the wrong
+ * repetition, which is the one thing the placement already ruled out.
+ */
+const FRAME_SLACK = MAX_SEP_LEN + 1;
+
+/** A placed frame, and where it starts relative to the unit's first column. */
+interface FrameAt {
+  text: string;
+  rel: number;
+}
+
+/**
+ * Total edits between the frames and the marquee `unit` would produce: how
+ * badly a candidate fails to explain what was actually on screen.
+ *
+ * This exists because the fold cannot report the separator's width. The ♪
+ * occupies the same columns in every repetition, but OCR renders it at
+ * different widths — `Singers’ Ben` in one frame, `Singers Ben` in the next —
+ * so frames on the narrow reading sit one column left of frames on the wide one
+ * for the whole of the following copy. Folding modulo the period then stacks a
+ * credit character onto the separator column, and it can win the majority vote
+ * there: on 2026-08-27 the ♪ of "Ben Seretan — Rana Singers" collected enough
+ * `s` votes from `Singers` to be read as one, and the tracker wrote
+ * `Rana Singerss` five times over two days, each time flagging nothing worse
+ * than the single no-majority column it had already smoothed over.
+ *
+ * A raw frame has no such smear: it is one reading of one repetition. A unit
+ * one character too long has to spell that character into every frame that
+ * crosses the loop boundary, and none of them contain it.
+ *
+ * `gap` is the separator AS RENDERED, which is why it is searched rather than
+ * taken from the candidate: the same 2-column ♪ reads as 1 character in one
+ * frame and 2 in the next, and both readings must be free to match. Every
+ * candidate gets the same range, so none is favoured by the search itself.
+ */
+function frameCost(unit: string, frames: FrameAt[]): number {
+  let total = 0;
+  for (const f of frames) {
+    let best = Infinity;
+    for (let gap = 0; gap <= MAX_SEP_LEN; gap++) {
+      const cell = unit + " ".repeat(gap);
+      let marquee = "";
+      while (marquee.length < f.text.length + cell.length) marquee += cell;
+      for (let d = -FRAME_SLACK; d <= FRAME_SLACK; d++) {
+        const o = (((f.rel + d) % cell.length) + cell.length) % cell.length;
+        const edits = editDistance(f.text, marquee.slice(o, o + f.text.length));
+        if (edits < best) best = edits;
+      }
+    }
+    total += best;
+  }
+  return total;
 }
 
 interface Placed {
@@ -496,8 +571,35 @@ function stitchAligned(fragments: string[]): StitchResult {
   if (pool.length === 0) {
     return { unit: null, confident: false, reason: "no_separator", droppedFragments: dropped };
   }
-  const chosen = pool[0];
-  const unit = evaluate(chosen);
+  /*
+   * 5d. How WIDE the separator is, from the frames rather than from the fold.
+   *
+   * The rotation above is settled: `pool[0]` says where the credit starts, and
+   * that is what the pause anchors and the artifacts are evidence of. What they
+   * cannot say is where it ends, because `sepLenBefore` reads the fold and the
+   * fold is what loses a separator column (see `frameCost`). So the separator
+   * is widened from that floor, up to MAX_SEP_LEN, and the width whose marquee
+   * best explains the raw frames wins. Only the credit's last characters move;
+   * every candidate here starts at the same column.
+   */
+  const unitStart = (pool[0].start + pool[0].len) % period;
+  const frames: FrameAt[] = placements.map((p) => ({
+    text: p.text,
+    rel: (((p.offset - minCol - unitStart) % period) + period) % period,
+  }));
+  const widths: { cand: SeparatorCandidate; unit: string; cost: number }[] = [];
+  for (let len = pool[0].len; len <= MAX_SEP_LEN; len++) {
+    const cand = { start: (((unitStart - len) % period) + period) % period, len };
+    const candUnit = evaluate(cand);
+    if (!validUnit(candUnit)) continue;
+    widths.push({ cand, unit: candUnit, cost: frameCost(candUnit, frames) });
+  }
+  // Never empty: `len === pool[0].len` reproduces `pool[0]`, which is in the
+  // pool because it already passed `validUnit`. The sort is stable, so frames
+  // that cannot tell two widths apart leave the fold's own answer standing.
+  widths.sort((a, b) => a.cost - b.cost);
+  const chosen = widths[0].cand;
+  const unit = widths[0].unit;
 
   // Low-confidence columns inside the unit matter; ambiguity in the separator
   // region is expected (that's the ♪ glyph) and doesn't taint the unit.

@@ -121,6 +121,49 @@ describe("a burst that straddles a song change", () => {
   });
 });
 
+describe("a ♪ that OCRs at two different widths glues itself to the credit", () => {
+  /*
+   * Both fixtures are real bursts off the deployed tracker's journal, of the
+   * credit that cost 2026-08-26 and 2026-08-27 their `Ben Seretan — Rana
+   * Singers` rows. The ♪ takes two columns on screen and OCR reads them either
+   * as `Singers’ Ben` or as `Singers Ben`, so half the frames sit one column
+   * left of the other half for the whole of the following copy. The fold
+   * smears a `s` (fixture 13) or a `’` (fixture 14) onto the separator column,
+   * the rotation cuts only the space, and the extra character rides onto the
+   * page — flagged as nothing worse than the one no-majority column the fold
+   * had already smoothed over.
+   *
+   * Both stitched CONFIDENTLY once the separator's width is measured against
+   * the frames rather than read off the fold, which matters as much as the
+   * spelling: `recordPlay` dedups the rest of the day onto the first one.
+   */
+  test("fixture 13 — the ♪ smears an `s` off `Singers` onto the separator column", async () => {
+    const res = stitch(await loadFixture("fixture13-glued-glyph.txt"));
+    expect(res.unit).toBe("Ben Seretan — Rana Singers");
+    expect(res.confident).toBe(true);
+  });
+
+  test("fixture 14 — the same credit, with the ♪'s own `’` winning the column", async () => {
+    const res = stitch(await loadFixture("fixture14-glued-glyph-quote.txt"));
+    expect(res.unit).toBe("Ben Seretan — Rana Singers");
+    expect(res.confident).toBe(true);
+  });
+
+  test("the frames are what settle it — the fold alone cannot", async () => {
+    /*
+     * The property, not the string: the burst holds 14 frames reading exactly
+     * `Ben Seretan — Rana Singers` (the marquee's hold at the unit start), and
+     * not one frame anywhere in it spells `Singerss` or `Singers’ Ben Seretan
+     * — Rana Singers’`. A unit no frame corroborates must not reach the row.
+     */
+    for (const f of ["fixture13-glued-glyph.txt", "fixture14-glued-glyph-quote.txt"]) {
+      const frags = await loadFixture(f);
+      const unit = stitch(frags).unit!;
+      expect(frags.some((frame) => frame.includes(unit))).toBe(true);
+    }
+  });
+});
+
 describe("robustness", () => {
   test("empty and whitespace-only fragments are dropped", async () => {
     const frags = await loadFixture("fixture2-clean-stitch.txt");

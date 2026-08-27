@@ -314,10 +314,11 @@ output: the platform mono fallback renders without complaining.
 The marquee scrolls one credit on a loop, so no single frame holds the whole
 thing. A burst is 30 s at 2 fps and the stitcher recovers the credit from it:
 align the fragments on a shared column axis by best overlap, vote per column,
-detect the loop's repeat period, fold the votes modulo that period, then rotate
-the cyclic result to the loop boundary.
+detect the loop's repeat period, fold the votes modulo that period, rotate the
+cyclic result to the loop boundary, then check that cut back against the raw
+frames.
 
-Two details are worth knowing before touching any of it, both paid for on
+Three details are worth knowing before touching any of it, two paid for on
 2026-08-26: of that day’s 62 failed bursts, 44 died at period detection with a
 readable consensus already in hand, and replaying them against the bounds below
 recovered 24.
@@ -336,6 +337,20 @@ recovered 24.
   reach the row is the other case — copies that merely resemble each other,
   which is a fold that smeared two readings together and parses perfectly well
   as a credit. `validUnit` refuses anything that still repeats.
+- **Only the frames know how wide the ♪ is.** The rotation sources say where
+  the credit STARTS. Where it ENDS is a separator width, and the fold is
+  precisely where that goes missing: the ♪ holds the same columns every
+  repetition but OCR renders it at two widths (`Singers’ Ben` in one frame,
+  `Singers Ben` in the next), so half the frames sit one column left of the
+  other half for the whole of the next copy, and folding modulo the period
+  stacks a credit character onto the separator column — where it can win the
+  vote. That is how the page carried `Ben Seretan — Rana Singerss` for two
+  hours on 2026-08-27, five bursts over two days, each one reporting nothing
+  worse than the single no-majority column it had already smoothed over. So
+  `sepLenBefore` is read as a floor and `frameCost` widens it: a raw frame is
+  one reading of one repetition and has no such smear, and a unit one character
+  too long has to spell that character into every frame crossing the loop
+  boundary. Fixtures 13 and 14 are two of those bursts.
 
 Alignment runs twice. The first pass scores each fragment against whatever was
 placed before it, so the early ones are judged by a nearly empty tally; the
@@ -691,8 +706,10 @@ All capture constants live in `tracker/src/config.ts`. Measured facts: crop
 terrain reaches y 106, and the crop stops at 87 to stay clear of it); marquee
 scrolls ≈ 4 chars/s with a ~1–2 s hold
 at the unit start each loop; the ♪ glyph between loop repetitions OCRs as `C`,
-`¢¢`, `dd`, a plain space, or nothing; song transitions are instant text swaps
-(empty OCR = capture hiccup, not a transition).
+`¢¢`, `dd`, `’`, a plain space, or nothing — and not the same way twice in one
+burst, which is why its width is settled against the frames and not the fold;
+song transitions are instant text swaps (empty OCR = capture hiccup, not a
+transition).
 
 ```bash
 # resolve the stream URL (the ~6 h embedded expiry is a lie: the media playlist
