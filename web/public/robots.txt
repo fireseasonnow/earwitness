@@ -1,0 +1,22 @@
+# Earwitness is one page, and it wants to be found.
+#
+# There is no crawl trap here to defend against: one route, no archive, no dated
+# pages, no query parameters, so a crawler's entire appetite is this URL however
+# many times it asks. Load is the edge's job in any case (`s-maxage` in
+# web/src/lib/freshness.ts), and a crawler that would actually hurt the uplink is
+# one that ignores this file.
+#
+# AI crawlers are allowed on the same terms, training and retrieval alike. The
+# state lives at most 24 hours, the code is MIT, and the track names belong to
+# their artists either way — there is nothing here a Disallow would protect. The
+# answer engines are also the likeliest way a reader arrives at a live question
+# like "what is Claude FM playing".
+
+User-agent: *
+Allow: /
+
+# No Sitemap: line, deliberately. The only route is SSR (`prerender = false`), so
+# @astrojs/sitemap would emit an empty urlset — withastro/astro#3682 — and the
+# one URL it could list is the homepage every crawler starts from. A <lastmod>
+# would be the only thing a sitemap added, and on a page that changes every 30 s
+# and empties at Amsterdam midnight there is no honest value to put in it.

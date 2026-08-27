@@ -1,5 +1,7 @@
-<!-- Source for `web/public/og-card.png`, which is what ships: edit this, then
-     re-render with the headless-Chrome command under "Design" in the README.
+<!-- Source for the PNG in `web/public/` that ships: edit this, then re-render
+     with the headless-Chrome command under "Design" in the README. The shipped
+     name carries a version and a redraw bumps it, so `CARD` in
+     `web/src/lib/metadata.ts` is what says which file is current.
 
      It is the page's header drawn large, and it names no song and no state —
      every platform caches the card it fetches, so a claim about the air would go

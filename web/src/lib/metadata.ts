@@ -76,9 +76,17 @@ export const PAGE_DESCRIPTION =
  * It draws the mark, the wordmark and the tagline, and deliberately no song and
  * no state: platforms cache a card for days, so anything it said about the air
  * would be a stale claim in someone else's timeline.
+ *
+ * The filename carries a version because that cache is keyed by URL and nothing
+ * else: Slack, X, Facebook and iMessage each hold the card they first fetched,
+ * and a `?v=` query is normalised away by enough scrapers not to be a bust. A
+ * redraw is therefore a NEW path — bump the number, re-render, delete the old
+ * file — and until the number changes, everyone who has already shared a link
+ * keeps seeing the card from before the edit. `test/metadata.test.ts` holds the
+ * shape of the name so a redraw cannot quietly reuse the URL.
  */
 export const CARD = {
-  path: "/og-card.png",
+  path: "/og-card-1.png",
   width: 1200,
   height: 630,
   alt: "The Earwitness mark and wordmark on the stream's paper ground.",

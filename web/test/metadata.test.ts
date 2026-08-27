@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   absolute,
@@ -17,14 +17,18 @@ import {
  * that never reaches the markup renders exactly like one that does, and no
  * screenshot at any width would show the difference.
  *
- * Four things are held here:
+ * Five things are held here:
  *
  *   the BUDGET     a description longer than a result or an unfurl will show is
  *                  a sentence finished for nobody
  *   the DISCLAIMER the unfurl reaches people who never open the page, so it
  *                  names the station and denies the affiliation like the footer
  *   the CARD       the dimensions in the head are the PNG's own, or a scraper
- *                  lays out a frame the image does not fill
+ *                  lays out a frame the image does not fill — and its URL
+ *                  carries the version that is the only cache bust platforms
+ *                  honour
+ *   the WELCOME    `robots.txt` blocks nobody, which is a decision, and a stray
+ *                  `Disallow: /` would delist the site invisibly
  *   the CALL SITES the words and the origin are in `lib/metadata.ts`, or the
  *                  head and the config quietly grow copies of them
  */
@@ -126,6 +130,29 @@ describe("the card in the head is the card on disk", () => {
     expect(Math.abs(CARD.width / CARD.height - 1.91)).toBeLessThan(0.01);
   });
 
+  /**
+   * Every platform caches a card under the URL it first fetched, so new bytes at
+   * an old path reach nobody who has already shared a link. The version in the
+   * name IS the cache bust, which makes the shape of the name load-bearing — and
+   * a redraw that overwrites the current file in place passes every other test
+   * in this file while reaching no existing reader.
+   */
+  test("the name carries a version, so a redraw is a new URL", () => {
+    expect(CARD.path).toMatch(/^\/og-card-\d+\.png$/);
+  });
+
+  /**
+   * The card a bump replaced is unreferenced from the moment `CARD.path` moves,
+   * and an unreferenced 20 KB PNG beside the live one is how the wrong card gets
+   * re-rendered a year later.
+   */
+  test("only the current card ships", () => {
+    const shipped = readdirSync(join(PACKAGE, "public")).filter((f) =>
+      f.startsWith("og-card-"),
+    );
+    expect(shipped).toEqual([CARD.path.slice(1)]);
+  });
+
   test("the head declares it whole: URL, both numbers, and alt text", () => {
     expect(layoutSrc).toContain('property="og:image" content={absolute(CARD.path)}');
     expect(layoutSrc).toContain('property="og:image:width" content={String(CARD.width)}');
@@ -134,6 +161,47 @@ describe("the card in the head is the card on disk", () => {
     // The large card is the point of having one at all.
     expect(layoutSrc).toContain('name="twitter:card" content="summary_large_image"');
     expect(CARD.alt.length).toBeGreaterThan(20);
+  });
+});
+
+/**
+ * The one file here that no build step reads, no type checker sees and no
+ * screenshot at any width would show — while hiding the largest failure
+ * available on this site: a stray `Disallow: /` delists the page outright and
+ * leaves it looking perfect from every other angle.
+ *
+ * It blocks nobody, AI crawlers included, and the file itself carries the
+ * reasoning. This is the decision written down where a regression trips over it.
+ */
+describe("robots.txt lets everyone in", () => {
+  const directives = readFileSync(join(PACKAGE, "public", "robots.txt"), "utf8")
+    .split("\n")
+    .map((line) => line.replace(/#.*/, "").trim())
+    .filter(Boolean);
+
+  /** A bare `Disallow:` is the allow-everything spelling; a path is a block. */
+  const BLOCK = /^Disallow:\s*\S/i;
+
+  test("it allows every crawler and blocks none", () => {
+    expect(directives).toContain("User-agent: *");
+    expect(directives).toContain("Allow: /");
+    expect(directives.filter((d) => BLOCK.test(d))).toEqual([]);
+  });
+
+  /**
+   * One SSR route: `@astrojs/sitemap` would emit an empty urlset, and the only
+   * URL it could name is the homepage every crawler starts from. A `<lastmod>`
+   * is the one thing a sitemap would add, and a page that changes every 30 s and
+   * empties at Amsterdam midnight has no honest value to put in it.
+   */
+  test("it names no sitemap, because there is none to name", () => {
+    expect(directives.filter((d) => /^Sitemap:/i.test(d))).toEqual([]);
+  });
+
+  test("the guard would catch a block that arrived later", () => {
+    expect(BLOCK.test("Disallow: /")).toBe(true);
+    expect(BLOCK.test("Disallow: /og-card-1.png")).toBe(true);
+    expect(BLOCK.test("Disallow:")).toBe(false);
   });
 });
 

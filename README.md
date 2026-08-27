@@ -237,25 +237,49 @@ and nothing redirects it, so the canonical is what says the two are one page —
 The canonical carries the path only, so a `?utm_…` or `?via=…` arrival collapses
 onto the route, which is also how the edge is told to key its cache.
 
-**The card.** `web/public/og-card.png` at 1200×630, the frame every unfurl crops
-to, from the source in `docs/og-card.svg`. It is the header drawn large — mark,
-wordmark, tagline, the hero's halftone rule — and it names no song and no state:
-a platform caches the card for days, so a claim about the air would go stale
-inside someone else's timeline. Its colours are literals like the favicon's, and
+**Nothing is blocked, and there is no sitemap.** `web/public/robots.txt` allows
+every crawler, AI ones included, and says why in the file — the short of it is
+that one route is no crawl trap, that load is the edge's problem and not a
+voluntary file's, and that a day of public ticker readings is nothing a
+`Disallow` would protect. A sitemap would carry the homepage every crawler
+already starts from, and `@astrojs/sitemap` would emit an empty urlset anyway
+because the route is SSR ([withastro/astro#3682](https://github.com/withastro/astro/issues/3682)).
+It is static in `public/` rather than a route: the answer is the same for every
+request, so serving it from the origin per request would buy nothing and cost a
+render.
+
+**The card.** 1200×630 in `web/public/`, the frame every unfurl crops to, from
+the source in `docs/og-card.svg`. It is the header drawn large — mark, wordmark,
+tagline, the hero's halftone rule — and it names no song and no state: a platform
+caches the card for days, so a claim about the air would go stale inside someone
+else's timeline. Its colours are literals like the favicon's, and
 `palette.test.ts` holds each one to the token it copies. The dimensions are
 declared in the head so a scraper can lay the frame out before the image lands,
 and the test reads the PNG to keep them the file's own.
 
-**Redrawing the card** — edit the SVG, then re-render. Roboto Mono is fetched
-from the CDN while Chrome runs, so check the face in the output: the platform
-mono fallback renders without complaining.
+That cache is keyed by the URL and nothing else, so **the filename carries a
+version** — `CARD.path` in `metadata.ts` — and a redraw is a new path rather than
+new bytes at an old one. A `?v=` query is not a substitute; enough scrapers
+normalise it away.
+
+**Redrawing the card** — edit the SVG, bump `CARD.path` to the next number, then
+render and drop the file it replaced. The command takes the name from `CARD`, so
+the version has one definition and the bump is one edit:
 
 ```bash
+CARD=$(bun -e 'import {CARD} from "./web/src/lib/metadata"; process.stdout.write(CARD.path)')
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
   --window-size=1200,630 --virtual-time-budget=5000 \
-  --screenshot=web/public/og-card.png "file://$PWD/docs/og-card.svg"
+  --screenshot="web/public$CARD" "file://$PWD/docs/og-card.svg"
 ```
+
+Then `git rm` the card it replaced — the old URL is dead the moment the constant
+moves, and two PNGs in `public/` is one of them going stale unnoticed.
+
+
+Roboto Mono is fetched from the CDN while Chrome runs, so check the face in the
+output: the platform mono fallback renders without complaining.
 
 ## Reading the ticker
 
@@ -566,7 +590,8 @@ cd web     && bun test   # health thresholds and their ORDER, the hero's words,
                          # day filter, the palette's provenance, contrast and
                          # call sites, the head's words and the budget they are
                          # written to, the card's dimensions against the PNG on
-                         # disk, and the guards keeping words out of health.ts,
+                         # disk and the version in its name, robots.txt blocking
+                         # nobody, and the guards keeping words out of health.ts,
                          # the domain to one definition, and the two
                          # day-boundary copies in step
 ```
