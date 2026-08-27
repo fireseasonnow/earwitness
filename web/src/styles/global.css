@@ -98,6 +98,25 @@
 }
 
 /**
+ * The palette is a light one, and the browser may not re-mix it.
+ *
+ * This is a phone-only hazard: Android Chrome's Auto Dark Theme darkens light
+ * pages that say nothing about their colour scheme, and what it produces is an
+ * algorithmic inversion of pixels counted off the stream — the halftone's line
+ * included, which is the one relationship in here that cannot survive being
+ * recomputed. `only light` forbids the override outright (`light` alone permits
+ * it) and pins the UA's own surfaces — scrollbar, form controls, spellcheck —
+ * to the same scheme. `theme-color` in `Layout.astro` carries the paper up into
+ * the browser chrome above the page, so the phone frames the page in its own
+ * ground rather than in the browser's.
+ */
+@layer base {
+  :root {
+    color-scheme: only light;
+  }
+}
+
+/**
  * The halftone rule under the hero: the one value with no utility equivalent.
  * Its vertical margins step with the breakpoints, so they stay on the markup
  * rather than here.

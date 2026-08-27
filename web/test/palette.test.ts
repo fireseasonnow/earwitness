@@ -220,6 +220,86 @@ describe("palette — the ratios written next to the tokens", () => {
 });
 
 /**
+ * One palette, three widths.
+ *
+ * The colours are the same on a phone as on a desktop, and that is a decision
+ * rather than an accident: the two breakpoints step the TYPE scale only, so the
+ * ratios written next to the tokens hold everywhere and there is one palette to
+ * audit instead of three. The only text that clears 24px is the hero title, and
+ * it clears it at every width, so nothing here leans on the large-text 3:1 bar
+ * at one width and loses it at another.
+ *
+ * What is left are the two things a phone does that a desktop does not: it hands
+ * a light page to a darkening algorithm, and it never sends a hover.
+ */
+describe("palette — the same palette at every width", () => {
+  /** `md:text-muted` and friends: a colour that only applies above 700px. */
+  function breakpointScoped(source: string, name: string): string[] {
+    const re = new RegExp(`(?:md|lg):[a-z]+-${name}(?![\\w-])`, "g");
+    return [...source.matchAll(re)].map((m) => m[0]);
+  }
+
+  test("no colour is scoped to a breakpoint", () => {
+    const scoped = [...SOURCES].flatMap(([file, source]) =>
+      TOKENS.flatMap((t) => breakpointScoped(source, t.name).map((c) => `${file}: ${c}`)),
+    );
+    expect(scoped).toEqual([]);
+  });
+
+  test("the check would notice a colour that only applies at one width", () => {
+    expect(breakpointScoped('class="text-muted md:text-faint"', "faint")).toEqual([
+      "md:text-faint",
+    ]);
+    // The breakpoints do step the type scale, and that is not a colour.
+    expect(breakpointScoped('class="text-row md:text-lede"', "row-ink")).toEqual([]);
+  });
+
+  /**
+   * On a touch screen the hover tier never renders, so a link whose only mark is
+   * the accent has to carry it on colour alone — and the accent is not far
+   * enough from the grey around it for that to be legible, let alone to satisfy
+   * WCAG 1.4.1. The underline is therefore unconditional, and hover deepens the
+   * colour rather than revealing the affordance.
+   */
+  describe("an accent link does not wait for a hover", () => {
+    const markup = [...SOURCES].filter(([f]) => f.endsWith(".astro")).map(([, s]) => s).join("\n");
+    const links = [...markup.matchAll(/<a\s[^>]*>/g)].map((m) => m[0]);
+    /** `underline`, not `hover:underline` or `underline-offset-*`. */
+    const UNCONDITIONAL = /(?<![:\w-])underline(?![\w-])/;
+
+    test("colour alone could not mark it: the accent is under 3:1 on the body grey", () => {
+      const accent = resolve("var(--color-terra-text)");
+      const body = resolve("var(--color-muted)");
+      expect(contrast(accent, body)).toBeLessThan(3);
+    });
+
+    test("every link in the accent is underlined", () => {
+      const accented = links.filter((tag) => tag.includes("text-terra-text"));
+      expect(accented.length).toBeGreaterThan(0);
+      for (const tag of accented) expect(UNCONDITIONAL.test(tag), tag).toBe(true);
+    });
+
+    test("the check would catch the hover-only underline it replaced", () => {
+      expect(UNCONDITIONAL.test('class="text-terra-text hover:text-terra-hover hover:underline"'))
+        .toBe(false);
+      expect(UNCONDITIONAL.test('class="text-terra-text underline hover:text-terra-hover"')).toBe(
+        true,
+      );
+    });
+  });
+
+  /**
+   * Android Chrome darkens light pages that declare no colour scheme. Every
+   * value in the theme was counted off a frame, and the halftone's line is a
+   * relationship between them that no darkening algorithm preserves — so the
+   * override is refused outright rather than corrected afterwards.
+   */
+  test("the browser is forbidden from re-mixing the palette", () => {
+    expect(css).toMatch(/:root\s*\{\s*color-scheme:\s*only light;/);
+  });
+});
+
+/**
  * The health tones are the only colours the page picks at runtime, so they are
  * the only ones a rename can leave pointing at nothing. Tailwind generates no
  * CSS for a class outside the theme and raises nothing either: the tone would

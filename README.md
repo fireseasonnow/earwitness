@@ -140,6 +140,22 @@ and 1100px, with the rest of the namespace cleared). Note that a class outside
 the theme — an `sm:` variant, a mistyped token — generates no CSS and sits inert
 rather than erroring, so changes are checked at the two real widths.
 
+**The same palette at every width.** The breakpoints step the type scale and
+nothing else, so the ratios above hold on a phone as they do on a desktop and
+there is one palette to audit rather than three; the test fails a colour scoped
+to `md:` or `lg:`. The only text over 24px is the hero title, at every width, so
+nothing here leans on the large-text 3:1 bar in one place and loses it in
+another. Two things a phone does that a desktop does not are handled outright:
+
+- Android Chrome darkens a light page that declares no colour scheme, and an
+  algorithmic inversion does not preserve the halftone's line. `:root` therefore
+  declares `color-scheme: only light`, which refuses the override rather than
+  correcting it afterwards. `theme-color` carries the paper up into the browser
+  chrome above the page.
+- A touch screen never sends a hover, so the footer links are underlined
+  unconditionally: the accent is 1.9:1 against the grey it sits in, under the
+  3:1 that lets colour alone mark a link. Hover deepens the colour.
+
 **Re-sampling the palette** — a scene redesign is the only reason to. Count the
 colours of a frame rather than eyedropping one: the scene animates, and a dot
 halfway through a fade is not a palette entry.
@@ -182,7 +198,12 @@ nothing may call itself sampled without being in it.
 
 **Redrawing the screenshot** — build `web/`, point `EARWITNESS_STATE` at a
 directory of seeded sample plays, start the server and screenshot the viewport at
-1440×952 with headless Chrome. The desktop width is the only one committed.
+1440×952 with headless Chrome. The desktop width is the only one committed; the
+other two are checked and thrown away. Checking the phone width takes one trick:
+headless Chrome will not open a window narrower than 500px, so a 390px render has
+to happen inside a 390px-wide `<iframe>` — media queries follow the frame — or
+through the DevTools protocol. Screenshotting a 390px window instead silently
+renders at 500 and crops, which reads as an overflow bug that is not there.
 
 Two states the page deliberately does not have:
 
