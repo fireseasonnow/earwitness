@@ -249,14 +249,19 @@ It is static in `public/` rather than a route: the answer is the same for every
 request, so serving it from the origin per request would buy nothing and cost a
 render.
 
-Cloudflare has an opinion about that file too. Its Content Signals policy
-prepends a comment preamble about `search`, `ai-input` and `ai-train` to whatever
-the origin serves — while the origin had no `robots.txt` at all, the edge
-synthesized the whole thing. So the file in `public/` is what the test checks and
-the edge's copy is what a crawler reads: `curl -s https://earwitness.fyi/robots.txt`
-after a deploy is the only thing that shows the difference. Comments cost nothing,
-but a `Content-Signal: ai-train=no` appearing there would contradict this
-repository's decision without changing a line of it.
+Two things about that file are true only at the edge. While the origin had no
+`robots.txt`, Cloudflare synthesized one — its Content Signals preamble about
+`search`, `ai-input` and `ai-train`, comments and no directives. Once the origin
+serves its own it passes through verbatim, signal and all uninjected, so the
+synthesized copy is what a zone without this file gets rather than something
+layered over it.
+
+The second is the one that bites: `robots.txt` and the card are **static assets
+to Cloudflare, cached for four hours, and a 404 caches too**. Fetching either URL
+before the deploy that creates it pins a 404 at the edge for the rest of that
+window, with the origin serving 200 the whole time. Purge those URLs after a
+deploy that adds or renames one, or check them with `?cb=1` on the end — a
+different cache key, and so the origin's actual answer.
 
 **The card.** 1200×630 in `web/public/`, the frame every unfurl crops to, from
 the source in `docs/og-card.svg`. It is the header drawn large — mark, wordmark,
