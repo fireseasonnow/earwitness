@@ -544,14 +544,19 @@ appears, `LogRateLimitBurst=0` in the unit turns the limiter off for it.
 
 - **Turn on the location headers.** `cf-ipcountry` arrives with IP geolocation
   alone; `cf-timezone` needs the **Add visitor location headers** managed
-  transform, which is free on every plan and off by default. Without it `tz` is
-  `-` and nothing else changes.
+  transform (Rules → Settings → Managed Transforms, or `add_visitor_location_headers`
+  through `PATCH /zones/$ZONE_ID/managed_headers`), free on every plan and off by
+  default. Without it `tz` is `-` and nothing else changes. Verifying it takes
+  patience rather than a flag: the header only ever appears at the origin, and the
+  page's cache key ignores the query, so `?cb=1` will not force a render — space
+  two requests more than `EDGE_TTL_SECONDS` apart and watch `tz` in the journal.
 - **Tag the links you place.** Post `/?via=hn`, `/?via=bsky`. Referrer policy
   strips cross-origin referrers in most browsers and app webviews send none at
   all, so `direct` is an upper bound on "found it on their own" and the tag is
-  the only attribution that survives. Cloudflare keys its cache on the query
-  string, so each tag gets its own edge entry at the same TTL; keep the set
-  small. A refresh keeps the tag but is self-referred, so it inflates nothing.
+  the only attribution that survives. Tags are free here: the edge keys the
+  page's cache on the route alone, so they neither fragment the cache nor add an
+  origin render, and the canonical already collapses them onto `/` for crawlers.
+  A refresh keeps the tag but is self-referred, so it inflates nothing.
 
 ### What is deliberately not collected
 

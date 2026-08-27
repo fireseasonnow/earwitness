@@ -123,8 +123,12 @@ export function refererSource(
  * The half of attribution that survives referrer policy. Bluesky, Discord,
  * Mastodon clients and mail readers routinely send no referrer at all, so a
  * `direct` line and a link we placed by hand are otherwise indistinguishable.
- * Cloudflare keys its cache on the query string, so each tag gets its own edge
- * entry at the same TTL — keep the set small and the origin sees no extra load.
+ *
+ * A tag costs the edge nothing: the page's cache key carries the route alone —
+ * the same decision the canonical in `metadata.ts` rests on — so every tag shares
+ * one entry instead of fragmenting the cache, and a tagged arrival is sampled
+ * exactly like any other. The tag is read off this request's own URL, which the
+ * origin always receives in full whatever the cache key ignores.
  *
  * Rejected rather than scrubbed: a tag is something WE chose, so a value outside
  * `[a-z0-9_-]` is not a mangled tag, it is a stranger's input, and it is not
