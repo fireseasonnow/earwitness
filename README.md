@@ -17,7 +17,9 @@ Two supervised processes on one host, no AI calls.
   row. It also stamps a heartbeat every tick, records that the marquee still
   reads as the song already logged, and prunes at the Amsterdam day boundary.
 - `web/` — Astro + Tailwind, server-rendered on every request: `/` is the only
-  page. Times in Europe/Amsterdam, 12-hour with AM/PM (stored in UTC).
+  page. Times in Europe/Amsterdam, 12-hour with AM/PM (stored in UTC). It also
+  logs one anonymous line per arrival to the journal, which is all the traffic
+  telemetry there is.
 - `shared/` — the two things both processes must agree on and nothing else: how
   a credit splits into artist and title, and where the state directory is. Pure
   functions and constants, no I/O.
@@ -449,6 +451,141 @@ Failure counts, retry streaks and error output are deliberately **not** on the
 page. A viewer cannot act on them, and the symptom they can see is the silence
 row above. They go to the journal, where the operator is.
 
+## Traffic
+
+The web process writes one line per **arrival** — a page load that did not come
+from the page itself — and nothing else. Same rule as the failure counts above:
+a reader cannot act on it, so it goes to the journal and never onto the page or
+into `$EARWITNESS_STATE`, which holds a day of plays and nothing about whoever
+read them. No cookie, no client-side JavaScript, no third party.
+
+```
+2026-08-27T09:41:12.000Z arrival ref=news.ycombinator.com/item via=hn country=NL tz=Europe/Amsterdam device=mobile ua=chrome bot=0
+```
+
+| field | meaning |
+| --- | --- |
+| `ref` | referring `hostname/path`, query stripped, or `direct` |
+| `via` | the `?via=` tag of a link we posted ourselves, else `-` |
+| `country` | `cf-ipcountry`; `XX` unknown, `T1` Tor |
+| `tz` | `cf-timezone`, needs the location managed transform (below) |
+| `device` | `mobile` / `tablet` / `desktop` |
+| `ua` | Chromium / Firefox / WebKit family, no version |
+| `bot` | `1` when the user agent looks scripted |
+
+`robots.txt` welcomes every crawler, so this flag is what keeps that welcome from
+distorting every other number on the line — filter `bot=1` out before reading any
+of them, which the query below does.
+
+**These lines are a sample, and only proportions are honest.** The edge cache
+bounds origin renders at ~6 a minute per colo (`lib/freshness.ts`) however large
+the audience, and this code runs only on an origin render. Whether a request is
+the one that misses the cache has nothing to do with where it came from, so
+"a third of arrivals came from HN" holds; "we had 412 arrivals" does not. Totals
+and unique visitors come from Cloudflare's own edge counters, which see every
+request, cost nothing, and need no code:
+
+```bash
+# jq builds the request body: a GraphQL query is multi-line and a JSON string
+# may not be, so hand-escaping it is the one step that silently 400s.
+Q='{ viewer { zones(filter: {zoneTag: "<ZONE_ID>"}) {
+      httpRequests1dGroups(limit: 30, filter: {date_geq: "2026-08-01"},
+                           orderBy: [date_ASC]) {
+        dimensions { date } uniq { uniques }
+        sum { requests cachedRequests bytes cachedBytes } } } } }'
+
+curl -s https://api.cloudflare.com/client/v4/graphql \
+  -H "Authorization: Bearer $CF_ANALYTICS_TOKEN" -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg q "$Q" '{query: $q}')" | jq .
+```
+
+`requests - cachedRequests` and `bytes - cachedBytes` are also the uplink bill
+the edge TTL exists to hold down — the same query that reports readers reports
+whether that protection is still working. Token scope: Zone → Analytics → Read,
+supplied through the environment and never committed. Free-plan retention is
+days, so snapshot the daily rollup if a longer series matters; note also that
+its days are UTC while a day of plays is Amsterdam, so use
+`httpRequests1hGroups` and re-bucket to compare the two.
+
+### Reading the lines
+
+```bash
+U=<web-unit>    # systemctl list-units --all | grep -i earwitness
+                # user units need --user on every command below
+
+journalctl -u $U -f | grep arrival                  # watch, while posting a link
+
+# today's sources, readers only, ranked. Swap k= for via, country, tz, device, ua
+journalctl -u $U --since today -o cat \
+  | awk -v k=ref '/ arrival / && !/bot=1/ {
+      for (i = 1; i <= NF; i++) if ($i ~ "^" k "=") print substr($i, length(k) + 2)}' \
+  | sort | uniq -c | sort -rn
+```
+
+One query for every field, which is why each is a space-free `key=value` and an
+absent one is `-` rather than empty. `-o cat` drops journald's metadata and
+leaves the line's own timestamp, in the tracker's format, so
+`journalctl -o cat -u <web-unit> -u <tracker-unit> --since today` interleaves
+arrivals and plays into one timeline — the view where "traffic spiked" and "the
+tracker went quiet" become one story.
+
+**Where the journal actually is**, before relying on it: `ls /var/log/journal`
+— if that directory is missing, journald is running in RAM under
+`/run/log/journal` and every line dies at reboot (`Storage=persistent` fixes
+it). Retention is size-driven, not time-driven: `SystemMaxUse` defaults to 10%
+of the filesystem, and old entries fall off the back silently, so
+`journalctl --disk-usage` is the honest answer to "how far back can I look".
+Reading another user's system journal needs root or the `systemd-journal` group.
+Volume is not a concern — arrivals are thousands a day against journald's
+~10,000-per-30 s per-service rate limit — but if `Suppressed N messages` ever
+appears, `LogRateLimitBurst=0` in the unit turns the limiter off for it.
+
+### Two things worth doing on the Cloudflare side
+
+- **Turn on the location headers.** `cf-ipcountry` arrives with IP geolocation
+  alone; `cf-timezone` needs the **Add visitor location headers** managed
+  transform, which is free on every plan and off by default. Without it `tz` is
+  `-` and nothing else changes.
+- **Tag the links you place.** Post `/?via=hn`, `/?via=bsky`. Referrer policy
+  strips cross-origin referrers in most browsers and app webviews send none at
+  all, so `direct` is an upper bound on "found it on their own" and the tag is
+  the only attribution that survives. Cloudflare keys its cache on the query
+  string, so each tag gets its own edge entry at the same TTL; keep the set
+  small. A refresh keeps the tag but is self-referred, so it inflates nothing.
+
+### What is deliberately not collected
+
+No IP, no raw user-agent string, no city. Every field is a bucket, because a
+bucket describes a population while the raw values — joined on one timestamped
+line — describe a person, and this project's whole state evaporates at midnight.
+`lib/arrival.ts` is the only place a request header is read and it returns unions
+and validated tokens, so the anonymity is a property of its signatures rather
+than a habit; a test asserts a Samsung phone's model and OS build cannot appear
+in a line built from its own user agent.
+
+City is available — the same managed transform adds `cf-ipcity` — and is left
+off for three stacking reasons: a thousand-bucket long tail does not survive the
+cache sampling above, IP-to-city resolves mobile carriers to their egress hub so
+the ranking would describe network topology, and city beside device and referrer
+is the field that turns a statistic into a person. `tz` answers the question
+this page actually has: the day boundary is Amsterdam for everyone, so the
+readers worth knowing about are the ones who meet the rollover mid-afternoon.
+For a map, the free Cloudflare dashboard already draws requests by country,
+unsampled.
+
+Three known distortions, none of them fixable from a user-agent string: iPadOS
+Safari reports a desktop Mac UA by default, so most iPads land in `desktop`; a
+browser configured to send no referrer at all looks like a fresh `direct`
+arrival on every cache miss; and `bot` is a substring filter, not a taxonomy —
+it will file a Cubot phone as a crawler and miss a crawler that dresses up as
+Chrome. Each costs a share, none moves the mobile-versus-desktop split the two
+breakpoints are chosen on.
+
+If sampled proportions stop being enough, the upgrade is Cloudflare Pro rather
+than more code here: it reports referer host, device type, browser and a Visits
+metric (a page view whose referer is not this hostname — the arrival, defined at
+the edge) across every request, with no beacon and nothing on the page.
+
 ## Data
 
 Three plain files in `$EARWITNESS_STATE`. No database: with one day retained, every
@@ -606,8 +743,9 @@ cd web     && bun test   # health thresholds and their ORDER, the hero's words,
                          # call sites, the head's words and the budget they are
                          # written to, the card's dimensions against the PNG on
                          # disk and the version in its name, robots.txt blocking
-                         # nobody, and the guards keeping words out of health.ts,
-                         # the domain to one definition, and the two
+                         # nobody, the arrival rule with its anonymity and its
+                         # line format, and the guards keeping words out of
+                         # health.ts, the domain to one definition, and the two
                          # day-boundary copies in step
 ```
 
