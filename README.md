@@ -110,18 +110,79 @@ One responsive page, drawn at 1440, 834 and 390.
 The mark is *Pixel Note*, an eighth note on a 12×12 grid: 21 blocks, one
 geometry from the header down to the favicon, drawn in `currentColor` so it
 inherits the health tone — terracotta on air, grey off air, ochre in trouble.
-The live accent is Claude's own orange and the ochre is sampled off a live frame
-of the stream, so the page reads as a companion to what it tracks. The orange
-runs at one tier — the mark, the wordmark and the `now` chip carry the literal
-#d97757, at a measured 2.8:1 on paper. Ochre stays in two tiers, where the
-`-text` suffix marks the one that may set type. Type is Roboto Mono, behind the
-platform monospace stack.
+Type is Roboto Mono, behind the platform monospace stack.
+
+**The palette is the stream's own.** Not "inspired by": every colour in the theme
+is a pixel counted off a live frame, a blend of two of them, or a step down the
+scene's own shading, and `web/test/palette.test.ts` refuses a fourth kind.
+
+- **Sampled.** Paper #f5f3ed (62% of a frame by area), the halftone ink #2a2822,
+  the terracotta of Clawd — Claude's mascot — #d97757, which is also Claude's
+  brand orange, the two agreeing to within 1/255, its shaded side #bf684d, and the
+  shadow under its picnic basket #915c1b, which is the trouble tone.
+- **Blended.** Every neutral pixel in a frame satisfies G = R − 2, B = R − 8: the
+  scene's greys are one line through sRGB, from paper to ink. The page's five
+  neutrals are points on that line, quoted as a percentage of ink over paper, so
+  a grey cannot drift into a hue the stream does not have.
+- **Shaded.** The scene shades by a ×0.8845 multiply per step — Clawd's shaded
+  blocks are exactly its lit ones once over. Only the link hover needs a step the
+  frame does not already contain, and it takes the fourth.
+
+The live orange runs at ONE tier by choice: the mark, the wordmark and the `now`
+chip carry the same literal, at a measured 2.8:1 on paper, under the 4.5:1 small
+text normally wants. That is the palette's one accessibility compromise, it is
+recorded in `global.css`, and the test pins it so a second one cannot arrive
+quietly. Elsewhere the `-text` suffix marks the tier that may set type.
 
 The design system *is* Tailwind's theme: `web/src/styles/global.css` declares the
 palette, ten type steps, six tracking values and exactly two breakpoints (700px
 and 1100px, with the rest of the namespace cleared). Note that a class outside
 the theme — an `sm:` variant, a mistyped token — generates no CSS and sits inert
 rather than erroring, so changes are checked at the two real widths.
+
+**Re-sampling the palette** — a scene redesign is the only reason to. Count the
+colours of a frame rather than eyedropping one: the scene animates, and a dot
+halfway through a fade is not a palette entry.
+
+```bash
+URL=$(yt-dlp -g 'https://www.youtube.com/@claude/live')
+ffmpeg -loglevel error -i "$URL" -vf fps=1/15 -frames:v 20 -y f%03d.png  # ~5 min
+ffmpeg -loglevel error -i f001.png -f rawvideo -pix_fmt rgb24 -y frame.raw
+python3 - <<'EOF'
+from collections import Counter
+import colorsys
+d = open("frame.raw", "rb").read()
+c = Counter(d[i:i + 3] for i in range(0, len(d), 3))
+hsv = lambda px: colorsys.rgb_to_hsv(*[q / 255 for q in px])
+show = lambda px, n: print("  #%02x%02x%02x %8d  H%.0f S%.2f V%.2f"
+                          % (*px, n, hsv(px)[0] * 360, hsv(px)[1], hsv(px)[2]))
+print("ground"); [show(px, n) for px, n in c.most_common(1)]
+print("ink");    [show(px, n) for px, n in Counter({px: n for px, n in c.items()
+                                                   if hsv(px)[2] < 0.2}).most_common(3)]
+print("props");  [show(px, n) for px, n in c.most_common()[:400]
+                  if hsv(px)[1] > 0.3 and 0.3 < hsv(px)[2] < 0.98 and n > 300]
+# the halftone's line, the claim the neutrals rest on
+grey = [(px, n) for px, n in c.items() if hsv(px)[1] < 0.3]
+on = sum(n for px, n in grey if px[1] - px[0] == -2 and px[2] - px[0] == -8)
+print("neutrals on the paper-ink line: %.1f%%" % (100 * on / sum(n for _, n in grey)))
+EOF
+```
+
+Reading the output: the ground is one flat colour, the ink comes out as a cluster
+around #2a2822 because the dots are drawn antialiased, and the props carry their
+own antialiasing too — the entry is the one with the count, the neighbours within
+a unit or two are its edges. Run it on several of the 20 frames: a colour that
+survives across scenes is a palette entry, one that appears in a single scene is
+a prop, and a prop stays out. The scene has a blue that comes and goes and the
+page has no role for it; carrying it anyway is how a palette starts to drift.
+
+Put the new values in `global.css` with their measured contrast, and update
+SAMPLED in `web/test/palette.test.ts` — that list is the provenance record, and
+nothing may call itself sampled without being in it.
+
+**Redrawing the screenshot** — build `web/`, point `EARWITNESS_STATE` at a
+directory of seeded sample plays, start the server and screenshot the viewport at
+1440×952 with headless Chrome. The desktop width is the only one committed.
 
 Two states the page deliberately does not have:
 
@@ -439,7 +500,8 @@ cd tracker && bun test   # stitcher, fingerprint, day boundary, prune, dedup,
 cd shared  && bun test   # parse, and the guard against a second parser
 cd web     && bun test   # health thresholds and their ORDER, the hero's words,
                          # the read side's three no-rows paths, the Amsterdam
-                         # day filter, and the guards keeping words out of
+                         # day filter, the palette's provenance, contrast and
+                         # call sites, and the guards keeping words out of
                          # health.ts and the two day-boundary copies in step
 ```
 

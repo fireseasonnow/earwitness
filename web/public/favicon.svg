@@ -1,3 +1,15 @@
+<!-- Same 21 blocks as the header mark (Mark.astro), but with the colour baked in: a
+     file served straight from public/ cannot reference the theme, so the hex is a
+     literal here.
+
+     It is #bf684d, the shaded side of Clawd — Claude's mascot, and the terracotta
+     in the stream — where the header mark uses #d97757, its lit side. A 16px icon sits on browser chrome — tab strip,
+     bookmarks bar — whose background this page does not control, and the lighter
+     tier is too thin for that. Both are sampled pixels, so the icon stays inside
+     the stream's palette.
+
+     web/test/palette.test.ts pins this value to the palette: re-sample the stream
+     and the test fails until this file is updated too. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#bf684d" shape-rendering="crispEdges">
   <rect x="4" y="14" width="2" height="2" />
   <rect x="6" y="14" width="2" height="2" />

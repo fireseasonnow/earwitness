@@ -6,36 +6,59 @@
  */
 @theme {
   /* ---- Palette ------------------------------------------------------------
-   * Ochre is sampled from a live frame of the stream. The live accent is
-   * Claude's own orange (#d97757), so the page sits in visual sympathy with
-   * the station it logs.
+   * The palette is the stream's own. Every colour below is one of three things,
+   * and `web/test/palette.test.ts` refuses a fourth:
    *
-   * The live accent runs at ONE tier by choice: mark, type and chip all carry
-   * the literal #d97757 rather than an approximation of it, so the note and the
-   * wordmark are the same orange. The cost is measured and accepted — 2.8:1 on
-   * paper, under the 4.5:1 small text normally wants.
+   *   1. A PIXEL sampled off a live frame — paper, ink, terracotta, ochre.
+   *      Counted over 20 frames at 15 s apart, the scene is 62% paper by area;
+   *      the terracotta is Clawd, Claude's mascot, and the ochre the shadow
+   *      under its picnic basket.
+   *   2. A BLEND of paper and ink in sRGB. The scene's entire halftone ramp is
+   *      exactly this line — every neutral pixel in a frame satisfies
+   *      G = R - 2, B = R - 8 — so a grey off that line reads as a foreign
+   *      hue next to the stream. The percentage is ink over paper.
+   *   3. A STEP down the scene's own shading, which is a x0.8845 multiply per
+   *      step: Clawd's shaded side is exactly its lit side once over. Only
+   *      the link hover needs a step the frame does not already contain.
    *
-   * Ochre still runs in two tiers, and there the `-text` suffix remains the
-   * enforcement mechanism: `--color-ochre` sets no text on paper at any size.
+   * Ratios are against paper and are checked, not asserted, by the same test.
+   * The `-text` suffix marks the tier that may set type, and it too is checked:
+   * a `-text` token clears 4.5:1 — with one accepted exception, below.
+   *
+   * Re-sample after a scene redesign: see "Design" in the README.
    */
-  --color-paper: #f5f3ed; /* ground */
-  --color-ink: #2a2822; /* body, halftone         13.3:1 */
+  --color-paper: #f5f3ed;              /* ground · sampled                          */
+  --color-ink: #2a2822;                /* body, halftone · sampled           13.3:1 */
 
-  --color-terra: #d97757; /* live · mark, type, chip 2.8:1 */
-  --color-terra-text: #d97757; /* alias of the above: one tier, kept so the
-                                  call sites keep reading as intent */
-  --color-terra-hover: #85381e; /* link hover              7.3:1 */
+  /* Terracotta — Clawd. Claude's brand orange is #d97757 and the frame reads
+   * #d87756, so brand and scene agree to within 1/255 and this is both.
+   *
+   * It runs at ONE tier by choice: mark, type and chip carry the same literal,
+   * so the note and the wordmark are the same orange. The cost is measured and
+   * accepted — 2.8:1, under the 4.5:1 small text normally wants. The hover is
+   * the one place the ramp is allowed to run: four steps down Clawd's own
+   * shading, which clears 4.5:1 without leaving the scene's hue. */
+  --color-terra: #d97757;              /* live · mark, type, chip · sampled   2.8:1 */
+  --color-terra-text: var(--color-terra); /* alias of the above: one tier, kept so
+                                             the call sites keep reading as intent */
+  --color-terra-hover: #854935;        /* link hover · shade step 4           6.3:1 */
 
-  --color-ochre: #efb154; /* fills only              1.7:1 */
-  --color-ochre-text: #8a5f22; /* attention · text        5.1:1 */
+  /* Ochre — the shadow under the picnic basket, and the trouble tone. The weave
+   * above it is the scene's other ochre and is NOT here: at 1.7:1 it can only
+   * fill, the page has no ochre surface to fill, and a palette that carries a
+   * colour for a call site that does not exist is how the drift starts. The
+   * `-text` suffix says which tier may set type; the shadow is the only tier. */
+  --color-ochre-text: #915c1b;         /* attention · text · sampled          5.0:1 */
 
-  --color-dormant: #6b665b; /* off air, starting up    5.2:1 */
-
-  --color-muted: #6c6863; /* secondary labels        5.1:1 */
-  --color-artist-ink: #5c574d; /* the hero's artist line */
-  --color-row-ink: #3f3b34; /* log rows not playing now */
-  --color-faint: #b8b3a8; /* the em-dash between artist and title */
-  --color-rule: #ddd8cd; /* hairlines */
+  /* Neutrals — ink over paper, on the halftone's line. Off air there is nothing
+   * to accent, so the dormant tone falls back to the label grey rather than
+   * carrying a grey of its own that no reader could tell from it. */
+  --color-muted: #67655f;              /* secondary labels · 70% ink          5.3:1 */
+  --color-dormant: var(--color-muted); /* off air, starting up                5.3:1 */
+  --color-artist-ink: #595751;         /* the hero's artist line · 77% ink    6.5:1 */
+  --color-row-ink: #3e3c36;            /* log rows not playing now · 90% ink  9.9:1 */
+  --color-faint: #b6b4ae;              /* artist/title em-dash · 31% ink      1.9:1 */
+  --color-rule: #dbd9d3;               /* hairlines · 13% ink                 1.3:1 */
 
   /* ---- Type ---------------------------------------------------------------
    * Ten steps, named so they do not collide with Tailwind's own scale — which

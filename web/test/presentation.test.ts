@@ -170,8 +170,11 @@ describe("hero — plurals", () => {
 });
 
 describe("tone tiers", () => {
-  test("the live tone darkens for text, the other two do not need to", () => {
-    // Sampled terracotta is 3.6:1 — fine for a 24px mark, not for 10px type.
+  test("only the live tone keeps a name per tier, and both name one orange", () => {
+    // A separate name is what lets the mark's tier move in `global.css` without
+    // touching a call site. Today it does not move: see the palette, where
+    // `--color-terra-text` is an alias, and `test/palette.test.ts`, which
+    // checks that the two names resolve to the same literal.
     expect(toneMark.live).not.toBe(toneText.live);
     expect(toneMark.dormant).toBe(toneText.dormant);
     expect(toneMark.attention).toBe(toneText.attention);

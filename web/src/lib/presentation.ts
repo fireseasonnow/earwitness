@@ -27,10 +27,14 @@ export interface Hero {
 }
 
 /**
- * A tone is a pair, not a colour. The mark is a 24px graphic and
- * can carry the sampled terracotta at 3.6:1; the kicker is 10px type and needs
- * the darkened tier at 5.0:1. The other two tones are already dark enough that
- * both tiers are the same value.
+ * A tone is a pair of class names, not a colour: the mark is a 24px graphic and
+ * the kicker is 10px type, so a tone is free to run a lighter tier on the mark
+ * than it may set type in.
+ *
+ * None of the three spends that freedom today. The live orange runs at one tier
+ * by choice — `text-terra` and `text-terra-text` resolve to the same literal so
+ * the note and the wordmark match — and the other two are dark enough already.
+ * The palette in `global.css` holds the values and the contrast they cost.
  *
  * Written as whole literal class names so Tailwind's scanner finds them.
  */
