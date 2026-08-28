@@ -7,7 +7,11 @@
      every platform caches the card it fetches, so a claim about the air would go
      stale inside it. Colours are literals here for the same reason favicon.svg's
      is, and web/test/palette.test.ts holds each one to the token it copies.
-     Roboto Mono is fetched at render time: check the face in the PNG. -->
+     Roboto Mono is fetched at render time: check the face in the PNG.
+
+     `docs/github-card.svg` is this drawing again in GitHub's 2:1 frame, for a
+     social preview GitHub stores rather than fetches. The two are one drawing in
+     two frames: an edit here is a divergence until it is made there. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@500&amp;display=swap");
@@ -24,37 +28,45 @@
 
   <rect width="1200" height="630" fill="#f5f3ed" />
 
-  <!-- The Pixel Note's 21 blocks (Mark.astro) at x9, in the header's lit tier. -->
-  <g transform="translate(60, 152) scale(9)" fill="#d97757" shape-rendering="crispEdges">
-    <rect x="4" y="14" width="2" height="2" />
-    <rect x="6" y="14" width="2" height="2" />
-    <rect x="8" y="14" width="2" height="2" />
-    <rect x="10" y="14" width="2" height="2" />
-    <rect x="4" y="16" width="2" height="2" />
-    <rect x="6" y="16" width="2" height="2" />
-    <rect x="8" y="16" width="2" height="2" />
-    <rect x="10" y="16" width="2" height="2" />
-    <rect x="4" y="18" width="2" height="2" />
-    <rect x="6" y="18" width="2" height="2" />
-    <rect x="8" y="18" width="2" height="2" />
-    <rect x="10" y="18" width="2" height="2" />
-    <rect x="12" y="12" width="2" height="2" />
-    <rect x="12" y="14" width="2" height="2" />
-    <rect x="12" y="4" width="2" height="2" />
-    <rect x="12" y="6" width="2" height="2" />
-    <rect x="12" y="8" width="2" height="2" />
-    <rect x="12" y="10" width="2" height="2" />
-    <rect x="14" y="4" width="2" height="2" />
-    <rect x="16" y="4" width="2" height="2" />
-    <rect x="16" y="6" width="2" height="2" />
+  <!-- The drawing is 950 wide: the mark's left edge at 96 out to where the rule
+       stops at 1046, which is where the wordmark's last stem stops too. The rule
+       is sized to end flush with it, so 950 is that alignment and not a round
+       number waiting to be rounded — centring the card moves the whole block and
+       never the rule alone. (1200 - 950) / 2 = 125, and 125 - 96 is this 29. -->
+  <g transform="translate(29, 0)">
+
+    <!-- The Pixel Note's 21 blocks (Mark.astro) at x9, in the header's lit tier. -->
+    <g transform="translate(60, 152) scale(9)" fill="#d97757" shape-rendering="crispEdges">
+      <rect x="4" y="14" width="2" height="2" />
+      <rect x="6" y="14" width="2" height="2" />
+      <rect x="8" y="14" width="2" height="2" />
+      <rect x="10" y="14" width="2" height="2" />
+      <rect x="4" y="16" width="2" height="2" />
+      <rect x="6" y="16" width="2" height="2" />
+      <rect x="8" y="16" width="2" height="2" />
+      <rect x="10" y="16" width="2" height="2" />
+      <rect x="4" y="18" width="2" height="2" />
+      <rect x="6" y="18" width="2" height="2" />
+      <rect x="8" y="18" width="2" height="2" />
+      <rect x="10" y="18" width="2" height="2" />
+      <rect x="12" y="12" width="2" height="2" />
+      <rect x="12" y="14" width="2" height="2" />
+      <rect x="12" y="4" width="2" height="2" />
+      <rect x="12" y="6" width="2" height="2" />
+      <rect x="12" y="8" width="2" height="2" />
+      <rect x="12" y="10" width="2" height="2" />
+      <rect x="14" y="4" width="2" height="2" />
+      <rect x="16" y="4" width="2" height="2" />
+      <rect x="16" y="6" width="2" height="2" />
+    </g>
+
+    <!-- Wordmark and tagline in the header's two tiers, at its 0.24em and 0.16em. -->
+    <text x="262" y="290" font-size="96" letter-spacing="23.04" fill="#d97757">EARWITNESS</text>
+
+    <rect x="96" y="370" width="950" height="15" fill="url(#halftone)" opacity="0.3" />
+
+    <text x="96" y="440" font-size="34" letter-spacing="5.44" fill="#67655f">
+      PLAY LOG FOR CLAUDE FM
+    </text>
   </g>
-
-  <!-- Wordmark and tagline in the header's two tiers, at its 0.24em and 0.16em. -->
-  <text x="262" y="290" font-size="96" letter-spacing="23.04" fill="#d97757">EARWITNESS</text>
-
-  <rect x="96" y="370" width="950" height="15" fill="url(#halftone)" opacity="0.3" />
-
-  <text x="96" y="440" font-size="34" letter-spacing="5.44" fill="#67655f">
-    PLAY LOG FOR CLAUDE FM
-  </text>
 </svg>

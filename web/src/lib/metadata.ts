@@ -87,7 +87,7 @@ export const PAGE_DESCRIPTION =
  * shape of the name so a redraw cannot quietly reuse the URL.
  */
 export const CARD = {
-  path: "/og-card-1.png",
+  path: "/og-card-2.png",
   width: 1200,
   height: 630,
   alt: "The Earwitness mark and wordmark on the stream's paper ground.",
