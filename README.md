@@ -1,21 +1,27 @@
 # Earwitness
 
-An independent play log for [Claude FM](https://www.youtube.com/@claude/live),
-Anthropic's 24/7 stream. One always-on page showing what it has played **today**.
-Unofficial, and not affiliated with Anthropic.
+[Claude FM](https://www.youtube.com/@claude/live), Anthropic's 24/7 stream, names
+the song it is playing in exactly one place: a credit ticker scrolling through a
+corner of the video. Nothing publishes it as text, and each name is gone as soon
+as it scrolls off.
 
-**On air at [earwitness.fyi](https://earwitness.fyi).**
+Earwitness reads it anyway. Every 30 s it OCRs one cropped frame; on a song change
+it captures a 30 s burst at 2 fps and stitches the ~60 fragments — each a partial,
+half-misread slice of the marquee — back into one canonical `Artist — Title`. An
+independent project, unofficial and not affiliated with Anthropic.
+
+**On air at [earwitness.fyi](https://earwitness.fyi)** — what the stream has played
+**today**, and nothing older.
 
 ![The page on air — hero, health line, and the day's log](docs/screenshot-1440.png)
 
 Two supervised processes on one host, no AI calls.
 
-- `tracker/` — Bun + TypeScript loop: every 30 s it OCRs the credit ticker from
-  one cropped video frame; on song change it captures a 30 s burst at 2 fps and
-  stitches the ~60 marquee fragments into one canonical `Artist — Title` unit. A
-  stitch it is not sure of goes to the journal with its fragments, not onto the
-  row. It also stamps a heartbeat every tick, records that the marquee still
-  reads as the song already logged, and prunes at the Amsterdam day boundary.
+- `tracker/` — Bun + TypeScript: the loop above, and what it does when the loop
+  is not sure. A stitch it cannot vouch for goes to the journal with its
+  fragments, not onto the row. It also stamps a heartbeat every tick, records
+  that the marquee still reads as the song already logged, and prunes at the
+  Amsterdam day boundary.
 - `web/` — Astro + Tailwind, server-rendered on every request: `/` is the only
   page. Times in Europe/Amsterdam, 12-hour with AM/PM (stored in UTC). It also
   logs one anonymous line per arrival to the journal, which is all the traffic
