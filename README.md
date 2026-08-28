@@ -305,6 +305,26 @@ CARD=$(bun -e 'import {CARD} from "./web/src/lib/metadata"; process.stdout.write
 Then `git rm` the card it replaced — the old URL is dead the moment the constant
 moves, and two PNGs in `public/` is one of them going stale unnoticed.
 
+**The repository's card is a different file.** GitHub's social preview is not
+fetched from here — it is uploaded under Settings → General → Social preview and
+held on their side — so it has no URL to be cached by, takes no version in its
+name, and is not what `CARD` describes. Its frame is 2:1 rather than the unfurl's
+1200×630, and the site's card uploaded there loses ~15px off the top and the
+bottom. `docs/github-card.svg` is the same drawing at GitHub's recommended
+1280×640, the extra 80×10 of canvas split evenly around it, and it ships nowhere:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
+  --window-size=1280,640 --virtual-time-budget=5000 \
+  --screenshot="docs/github-card.png" "file://$PWD/docs/github-card.svg"
+```
+
+There is no API for the social preview, so the upload is a hand step — nothing
+about that file reaches GitHub without someone clicking — and the two SVGs are
+one drawing kept in two frames, so an edit to either is a divergence until it is
+made in both.
+
 
 Roboto Mono is fetched from the CDN while Chrome runs, so check the face in the
 output: the platform mono fallback renders without complaining.

@@ -1,0 +1,75 @@
+<!-- The GitHub repository's social preview, and only that.
+
+     Separate from `og-card.svg` because the two are fetched differently. A
+     platform unfurling earwitness.fyi GETs `web/public/og-card-N.png` and caches
+     it by URL, which is why that name carries a version and a redraw has to bump
+     it. GitHub fetches nothing: the preview is a file uploaded under Settings →
+     General → Social preview and stored on their side. So this card ships
+     nowhere, has no URL to be cached by, needs no version in its name, and is
+     not the file `web/src/lib/metadata.ts` and `metadata.test.ts` describe.
+
+     Same drawing, at GitHub's recommended 1280×640. The site's card is 1200×630,
+     the frame an unfurl crops to; GitHub's frame is 2:1, so the site's card
+     uploaded there would lose ~15px off the top and the bottom. Every coordinate
+     below is `og-card.svg`'s, unchanged: the two are one drawing in two frames,
+     and an edit to either is a divergence until it is made in both.
+
+     Edit this, then re-render with the headless-Chrome command under "Design" in
+     the README and upload the PNG by hand. There is no API for the social
+     preview, so nothing here reaches GitHub without someone clicking. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@500&amp;display=swap");
+    text {
+      font-family: "Roboto Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-weight: 500;
+    }
+  </style>
+
+  <!-- The hero's halftone rule at 3x its pitch: the same 32% of the cell. -->
+  <pattern id="halftone" width="15" height="15" patternUnits="userSpaceOnUse">
+    <circle cx="7.5" cy="7.5" r="2.4" fill="#2a2822" />
+  </pattern>
+
+  <rect width="1280" height="640" fill="#f5f3ed" />
+
+  <!-- The 950-wide block centred in this frame, as og-card.svg centres it in its
+       own: (1280 - 950) / 2 = 165, and 165 - 96 is this 69. The 5 is half the 10
+       of extra height. Nothing inside is rescaled — at 1280×640 the drawing is
+       the size it is at 1200×630, with more paper around it. -->
+  <g transform="translate(69, 5)">
+    <!-- The Pixel Note's 21 blocks (Mark.astro) at x9, in the header's lit tier. -->
+    <g transform="translate(60, 152) scale(9)" fill="#d97757" shape-rendering="crispEdges">
+      <rect x="4" y="14" width="2" height="2" />
+      <rect x="6" y="14" width="2" height="2" />
+      <rect x="8" y="14" width="2" height="2" />
+      <rect x="10" y="14" width="2" height="2" />
+      <rect x="4" y="16" width="2" height="2" />
+      <rect x="6" y="16" width="2" height="2" />
+      <rect x="8" y="16" width="2" height="2" />
+      <rect x="10" y="16" width="2" height="2" />
+      <rect x="4" y="18" width="2" height="2" />
+      <rect x="6" y="18" width="2" height="2" />
+      <rect x="8" y="18" width="2" height="2" />
+      <rect x="10" y="18" width="2" height="2" />
+      <rect x="12" y="12" width="2" height="2" />
+      <rect x="12" y="14" width="2" height="2" />
+      <rect x="12" y="4" width="2" height="2" />
+      <rect x="12" y="6" width="2" height="2" />
+      <rect x="12" y="8" width="2" height="2" />
+      <rect x="12" y="10" width="2" height="2" />
+      <rect x="14" y="4" width="2" height="2" />
+      <rect x="16" y="4" width="2" height="2" />
+      <rect x="16" y="6" width="2" height="2" />
+    </g>
+
+    <!-- Wordmark and tagline in the header's two tiers, at its 0.24em and 0.16em. -->
+    <text x="262" y="290" font-size="96" letter-spacing="23.04" fill="#d97757">EARWITNESS</text>
+
+    <rect x="96" y="370" width="950" height="15" fill="url(#halftone)" opacity="0.3" />
+
+    <text x="96" y="440" font-size="34" letter-spacing="5.44" fill="#67655f">
+      PLAY LOG FOR CLAUDE FM
+    </text>
+  </g>
+</svg>
