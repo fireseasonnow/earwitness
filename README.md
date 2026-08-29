@@ -311,6 +311,29 @@ CARD=$(bun -e 'import {CARD} from "./web/src/lib/metadata"; process.stdout.write
 Then `git rm` the card it replaced — the old URL is dead the moment the constant
 moves, and two PNGs in `public/` is one of them going stale unnoticed.
 
+**Redrawing the icons.** `web/public/favicon.svg` is the source for all four, and
+the rasters are regenerated from it with the same headless Chrome:
+
+```bash
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+"$CHROME" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
+  --default-background-color=00000000 --window-size=96,96 --virtual-time-budget=5000 \
+  --screenshot="web/public/favicon-96.png" "file://$PWD/web/public/favicon.svg"
+"$CHROME" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
+  --default-background-color=F5F3EDFF --window-size=180,180 --virtual-time-budget=5000 \
+  --screenshot="web/public/apple-touch-icon.png" "file://$PWD/web/public/favicon.svg"
+python3 -c 'import struct;p=open("web/public/favicon-96.png","rb").read();open("web/public/favicon.ico","wb").write(struct.pack("<HHH",0,1,1)+struct.pack("<BBBBHHII",96,96,0,0,1,32,len(p),22)+p)'
+```
+
+The two background colours are the whole subtlety. The crawler's PNG is cut out,
+because a search result may sit on either ground; the touch icon is opaque on the
+palette's paper, because iOS composites a transparent one onto **black**. The
+`.ico` is a container — an 22-byte header wrapped around that same PNG, which is
+what every reader since Vista expects — and it exists because `/favicon.ico` is
+requested by path whatever the markup declares. `metadata.test.ts` holds all of
+it: that each declared icon is on disk, that the rasters are square, and that the
+touch icon has no alpha channel.
+
 **The repository's card is a different file.** GitHub's social preview is not
 fetched from here — it is uploaded under Settings → General → Social preview and
 held on their side — so it has no URL to be cached by, takes no version in its

@@ -34,11 +34,14 @@ const { hero } = Astro.props;
     )
   }
 
-  <h1
+  {/* An h2 despite being the biggest type on the page: it says a different
+      thing on every render, and the document's top heading has to be what the
+      page IS. The wordmark in `DayView.astro` carries that. */}
+  <h2
     class="text-hero font-medium leading-[1.2] tracking-title text-pretty md:text-hero-md lg:text-hero-lg"
   >
     {hero.headline}
-  </h1>
+  </h2>
 
   <p class="mt-[14px] text-row leading-[1.55] text-muted md:mt-[15px] lg:mt-[16px]">
     {hero.detail}

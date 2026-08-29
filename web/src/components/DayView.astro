@@ -23,7 +23,11 @@ const hero = heroFor(state);
     <div class="flex items-center gap-[10px]">
       {/* The mark inherits the health tone — grey off air, ochre in trouble. */}
       <Mark class={toneMark[hero.tone]} />
-      <div class="flex flex-wrap items-baseline gap-[9px]">
+      {/* The h1: the only heading on the page that is the same on every render.
+          The hero's is state-dependent and cannot be it. Preflight resets `h1`
+          to inherit size and weight, so the spans below still carry every visual
+          decision and nothing moves. */}
+      <h1 class="flex flex-wrap items-baseline gap-[9px]">
         <span
           class="text-note font-medium uppercase tracking-label text-terra-text md:text-row md:tracking-brand"
         >
@@ -32,7 +36,7 @@ const hero = heroFor(state);
         <span class="text-micro uppercase tracking-tagline text-muted md:text-label">
           play log for Claude FM
         </span>
-      </div>
+      </h1>
     </div>
     <span class="text-note tracking-meta text-muted md:text-row">{todayDisplay()} · Amsterdam</span>
   </header>
@@ -55,6 +59,14 @@ const hero = heroFor(state);
       source link belongs here for the same reason: "independent project" is a
       claim, and the repository is the only thing that lets a reader check it.
 
+      It also carries the two facts that outlive the day: that no tracklist
+      exists, which is why this page has a reason to, and that the log empties at
+      midnight, which is why an empty one is not a fault. Those were briefly a
+      headed section of their own below the log. That section repeated this
+      paragraph, ran seven times the length of the whole of absolutelyright.lol —
+      which Google indexes on 79 words — and made the page busy to buy nothing.
+      The words earn their place here or not at all.
+
       The links are underlined before anything is pointed at them: on a touch
       screen hover never arrives, and the accent is 1.9:1 against the grey it
       sits in — under the 3:1 that lets colour alone mark a link. Hover deepens
@@ -66,8 +78,10 @@ const hero = heroFor(state);
     credit ticker on <a
       href="https://www.youtube.com/@claude/live"
       class="text-terra-text underline hover:text-terra-hover">Claude FM</a
-    >, Anthropic's 24/7 stream, and logs what it hears. Track names belong to their
-    respective artists. Source on <a
+    >, Anthropic's 24/7 stream, and logs what it hears: the stream publishes no tracklist, and
+    a single frame never shows a whole credit, so the tracker reads a burst and reconstructs
+    the line. The log holds one Amsterdam day and starts again empty at midnight. Track names
+    belong to their respective artists. Source on <a
       href="https://github.com/fireseasonnow/earwitness"
       class="text-terra-text underline hover:text-terra-hover">GitHub</a
     >, MIT licensed.

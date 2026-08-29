@@ -42,8 +42,20 @@ const canonical = absolute(Astro.url.pathname);
     <meta property="og:image:alt" content={CARD.alt} />
     <meta name="twitter:card" content="summary_large_image" />
 
-    {/* The Pixel Note again — same 21 blocks as the header mark. */}
+    {/* The Pixel Note again — same 21 blocks as the header mark, one drawing
+        served four ways. The SVG is for browsers; an image crawler wants a
+        square raster, and `/favicon.ico` is requested by path whatever the
+        markup declares.
+
+        96px is a multiple of the 48 a crawler asks for and an exact 4x of the
+        drawing's 24px grid, so `crispEdges` lands blocks on pixel boundaries.
+        The touch icon is opaque: iOS composites a transparent one onto BLACK.
+
+        Rendered from the SVG by the command in the README, beside the card's. */}
+    <link rel="icon" href="/favicon.ico" sizes="96x96" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     {/* Roboto Mono, Apache-2.0. The `--font-mono` token puts the
         platform monospace stack behind it, so a blocked CDN costs the page its

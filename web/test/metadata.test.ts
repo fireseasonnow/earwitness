@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   absolute,
@@ -239,5 +239,73 @@ describe("the head takes its words from this module", () => {
     expect(HARDCODED_WORDS.test('<Layout title="Earwitness" autoRefresh>')).toBe(true);
     expect(HOSTNAME_LITERAL.test(`site: "${ORIGIN}",`)).toBe(true);
     expect(HOSTNAME_LITERAL.test("site: ORIGIN,")).toBe(false);
+  });
+});
+
+/**
+ * The icons, which are rendered artifacts like the card and just as invisible to
+ * the build: a `<link>` pointing at a file that is not there renders exactly
+ * like one that is, and the browser quietly falls back to the next candidate or
+ * to nothing at all.
+ *
+ * Three properties, each with a consumer behind it:
+ *
+ *   they EXIST      a declared icon that 404s is worse than an undeclared one —
+ *                   `/favicon.ico` was a 404 here for exactly that reason
+ *   they are SQUARE an image crawler wants 1:1, and a search result's icon is
+ *                   the only picture of this site most people will ever see
+ *   the TOUCH ICON  iOS composites onto black, so an alpha channel there is a
+ *                   mark floating on a dark rectangle rather than on paper
+ */
+describe("the icons in the head are the icons on disk", () => {
+  const PUBLIC = join(PACKAGE, "public");
+  const declared = [...layoutSrc.matchAll(/<link rel="[^"]*icon[^"]*"[^>]*href="([^"]+)"/g)].map(
+    (m) => m[1],
+  );
+
+  test("the head declares the raster set, not the SVG alone", () => {
+    expect(declared).toContain("/favicon.ico");
+    expect(declared).toContain("/favicon.svg");
+    expect(declared).toContain("/favicon-96.png");
+    expect(declared).toContain("/apple-touch-icon.png");
+  });
+
+  test("every declared icon is a file that is actually served", () => {
+    for (const href of declared) {
+      expect(existsSync(join(PUBLIC, href))).toBe(true);
+    }
+  });
+
+  test("the rasters are square, and the crawler's one is a multiple of 48", () => {
+    for (const href of declared.filter((h) => h.endsWith(".png"))) {
+      const png = readFileSync(join(PUBLIC, href));
+      const [w, h] = [png.readUInt32BE(16), png.readUInt32BE(20)];
+      expect(w).toBe(h);
+    }
+    const crawler = readFileSync(join(PUBLIC, "favicon-96.png"));
+    expect(crawler.readUInt32BE(16)).toBe(96);
+    expect(96 % 48).toBe(0);
+  });
+
+  /** Colour types 4 and 6 are the two that carry alpha. */
+  test("the touch icon is opaque, because iOS composites it onto black", () => {
+    const png = readFileSync(join(PUBLIC, "apple-touch-icon.png"));
+    expect([4, 6]).not.toContain(png.readUInt8(25));
+  });
+
+  test("favicon.ico is a real ICO and not a PNG with the wrong name", () => {
+    const ico = readFileSync(join(PUBLIC, "favicon.ico"));
+    expect(ico.readUInt16LE(0)).toBe(0); // reserved
+    expect(ico.readUInt16LE(2)).toBe(1); // type: icon
+    expect(ico.readUInt16LE(4)).toBeGreaterThan(0); // at least one image
+  });
+
+  /** The source all four are rendered from. A non-square viewBox would letterbox
+      every raster below it without changing a single declared dimension. */
+  test("the SVG they are all drawn from is square", () => {
+    const svg = readFileSync(join(PUBLIC, "favicon.svg"), "utf8");
+    const box = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
+    expect(box).not.toBeNull();
+    expect(box![1]).toBe(box![2]);
   });
 });
