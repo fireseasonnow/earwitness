@@ -263,16 +263,34 @@ export function classifyClient(userAgent: string | null): Client {
 }
 
 /**
+ * A name we answer to, in both the forms a browser can report it.
+ *
+ * The `www.` record points at the same tunnel as the apex, so a reader can be
+ * parked on either name, and the edge redirect that sends www to the apex does
+ * not move a tab ALREADY open on it: that tab meta-refreshes its own URL, and
+ * every refresh arrives quoting the www name as its referrer. Left out, this is
+ * not a rounding error — over the first four days (Aug 2026) it was 37 of 169
+ * records, nearly all mobile Safari, the bucket `deviceKind` exists to size.
+ */
+function namesWeAnswerTo(hostname: string): string[] {
+  const bare = hostname.replace(/^www\./i, "");
+  return [bare, `www.${bare}`];
+}
+
+/**
  * Everything the journal will know about one arrival, or null when the request
  * is a refresh of a page the same reader already has.
  *
- * Two names count as ourselves: the canonical one, which is what a reader's
- * browser reports whatever the tunnel does to the `Host` header, and the one this
- * request arrived on, which is what covers `localhost` in development and any
- * preview host.
+ * Two names count as ourselves, each in both its bare and `www.` form: the
+ * canonical one, which is what a reader's browser reports whatever the tunnel
+ * does to the `Host` header, and the one this request arrived on, which is what
+ * covers `localhost` in development and any preview host.
  */
 export function describeArrival(url: URL, headers: Headers): Arrival | null {
-  const ref = refererSource(headers.get("referer"), [CANONICAL_HOSTNAME, url.hostname]);
+  const ref = refererSource(headers.get("referer"), [
+    ...namesWeAnswerTo(CANONICAL_HOSTNAME),
+    ...namesWeAnswerTo(url.hostname),
+  ]);
   if (ref === null) return null;
   return {
     ref,

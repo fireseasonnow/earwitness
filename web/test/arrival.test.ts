@@ -288,6 +288,33 @@ describe("describeArrival — the record of one visit", () => {
     expect(describeArrival(dev.url, dev.headers)).toBeNull();
   });
 
+  test("a tab left open on the `www.` name is still a refresh, not an arrival", () => {
+    // The edge redirect moves a new reader to the apex but not a tab already
+    // open on www, which meta-refreshes its own URL and quotes it as referrer.
+    const { url, headers } = request("/", {
+      referer: `https://www.${CANONICAL}/`,
+      "user-agent": UA.iphoneSafari,
+    });
+    expect(describeArrival(url, headers)).toBeNull();
+
+    // And it holds the other way round, for a request that arrived on www.
+    const onWww = request(
+      "/",
+      { referer: `https://${CANONICAL}/`, "user-agent": UA.iphoneSafari },
+      `www.${CANONICAL}`,
+    );
+    expect(describeArrival(onWww.url, onWww.headers)).toBeNull();
+  });
+
+  test("someone else's `www.` host is still an arrival", () => {
+    // The www rule must not turn every subdomain-shaped referrer into a refresh.
+    const { url, headers } = request("/", {
+      referer: "https://www.reddit.com/r/webdev/",
+      "user-agent": UA.windowsChrome,
+    });
+    expect(describeArrival(url, headers)!.ref).toBe("www.reddit.com/r/webdev/");
+  });
+
   test("missing Cloudflare headers degrade to `-`, not to an empty field", () => {
     // What local development and a direct origin hit look like.
     const { url, headers } = request("/", { "user-agent": UA.macSafari });
