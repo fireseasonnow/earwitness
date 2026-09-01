@@ -311,28 +311,42 @@ CARD=$(bun -e 'import {CARD} from "./web/src/lib/metadata"; process.stdout.write
 Then `git rm` the card it replaced — the old URL is dead the moment the constant
 moves, and two PNGs in `public/` is one of them going stale unnoticed.
 
-**Redrawing the icons.** `web/public/favicon.svg` is the source for all four, and
-the rasters are regenerated from it with the same headless Chrome:
+**Redrawing the icons.** `web/public/favicon.svg` is the source for all four,
+and the rasters are regenerated from it with:
 
 ```bash
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-"$CHROME" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
-  --default-background-color=00000000 --window-size=96,96 --virtual-time-budget=5000 \
-  --screenshot="web/public/favicon-96.png" "file://$PWD/web/public/favicon.svg"
-"$CHROME" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
-  --default-background-color=F5F3EDFF --window-size=180,180 --virtual-time-budget=5000 \
-  --screenshot="web/public/apple-touch-icon.png" "file://$PWD/web/public/favicon.svg"
-python3 -c 'import struct;p=open("web/public/favicon-96.png","rb").read();open("web/public/favicon.ico","wb").write(struct.pack("<HHH",0,1,1)+struct.pack("<BBBBHHII",96,96,0,0,1,32,len(p),22)+p)'
+cd web && bun run icons
 ```
+
+Not with headless Chrome, which is what this section used to say, and which
+shipped a **blank icon set**. `--default-background-color=00000000` returned a
+96x96 of pure RGBA(0,0,0,0): a valid PNG, correct content type, HTTP 200, right
+dimensions — and no mark in it. Google served the placeholder circle beside the
+result for two days before anyone looked at the pixels. The opaque touch-icon
+capture in the same block rendered correctly, which is why it went unnoticed.
+
+`scripts/render-icons.ts` has no SVG engine and no dependency, because the mark
+does not need one: 21 axis-aligned blocks on a 24-unit grid is integer rectangle
+fill, which is also the only way to be certain nothing antialiased the edges
+that `shape-rendering="crispEdges"` asks to keep hard. Sizes must be multiples
+of **12** — the grid is 12 blocks across, so anything else puts a block on a
+fractional pixel. That rules out 16 and 32, which is why the `.ico` holds 48 and
+96 and lets the browser downscale for the tab strip; both entries are also the
+multiple of 48 an image crawler asks for.
 
 The two background colours are the whole subtlety. The crawler's PNG is cut out,
 because a search result may sit on either ground; the touch icon is opaque on the
-palette's paper, because iOS composites a transparent one onto **black**. The
-`.ico` is a container — an 22-byte header wrapped around that same PNG, which is
-what every reader since Vista expects — and it exists because `/favicon.ico` is
-requested by path whatever the markup declares. `metadata.test.ts` holds all of
-it: that each declared icon is on disk, that the rasters are square, and that the
-touch icon has no alpha channel.
+palette's paper, because iOS composites a transparent one onto **black** — and it
+is written without an alpha channel at all, not merely with alpha at 255, since
+that is what a reader checks to decide. The `.ico` is a container around the same
+PNGs, which is what every reader since Vista expects, and it exists because
+`/favicon.ico` is requested by path whatever the markup declares.
+
+`metadata.test.ts` holds all of it: that each declared icon is on disk, that the
+rasters are square, that the touch icon has no alpha channel — and, since none of
+those noticed an empty square, **that each raster contains exactly the SVG's 21
+blocks of ink**, counted in pixels and derived from the SVG rather than written
+down here.
 
 **The repository's card is a different file.** GitHub's social preview is not
 fetched from here — it is uploaded under Settings → General → Social preview and

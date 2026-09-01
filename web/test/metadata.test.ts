@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { inflateSync } from "node:zlib";
 import {
   absolute,
   CARD,
@@ -257,6 +258,59 @@ describe("the head takes its words from this module", () => {
  *   the TOUCH ICON  iOS composites onto black, so an alpha channel there is a
  *                   mark floating on a dark rectangle rather than on paper
  */
+/**
+ * Enough PNG to answer "is there anything drawn here" — IHDR for the shape,
+ * IDAT for the pixels, and the five scanline filters undone.
+ *
+ * Written out rather than pulled in because a dependency is a strange thing to
+ * add to a test suite that has none, and because the icons are the one place
+ * where trusting a decoder to tell you an image is empty has already gone
+ * wrong once.
+ */
+function decodePng(file: Buffer): { width: number; channels: number; pixels: Uint8Array } {
+  let at = 8;
+  let width = 0;
+  let height = 0;
+  let colorType = 0;
+  const idat: Buffer[] = [];
+  while (at < file.length) {
+    const length = file.readUInt32BE(at);
+    const type = file.toString("ascii", at + 4, at + 8);
+    if (type === "IHDR") {
+      width = file.readUInt32BE(at + 8);
+      height = file.readUInt32BE(at + 12);
+      colorType = file.readUInt8(at + 17);
+    } else if (type === "IDAT") {
+      idat.push(file.subarray(at + 8, at + 8 + length));
+    }
+    at += 12 + length;
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const pixels = new Uint8Array(height * stride);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let x = 0; x < stride; x++) {
+      const a = x >= channels ? pixels[y * stride + x - channels] : 0;
+      const b = y > 0 ? pixels[(y - 1) * stride + x] : 0;
+      const c = x >= channels && y > 0 ? pixels[(y - 1) * stride + x - channels] : 0;
+      let recon = line[x];
+      if (filter === 1) recon += a;
+      else if (filter === 2) recon += b;
+      else if (filter === 3) recon += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const [pa, pb, pc] = [Math.abs(p - a), Math.abs(p - b), Math.abs(p - c)];
+        recon += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      pixels[y * stride + x] = recon & 0xff;
+    }
+  }
+  return { width, channels, pixels };
+}
+
 describe("the icons in the head are the icons on disk", () => {
   const PUBLIC = join(PACKAGE, "public");
   const declared = [...layoutSrc.matchAll(/<link rel="[^"]*icon[^"]*"[^>]*href="([^"]+)"/g)].map(
@@ -298,6 +352,40 @@ describe("the icons in the head are the icons on disk", () => {
     expect(ico.readUInt16LE(0)).toBe(0); // reserved
     expect(ico.readUInt16LE(2)).toBe(1); // type: icon
     expect(ico.readUInt16LE(4)).toBeGreaterThan(0); // at least one image
+  });
+
+  /**
+   * The property none of the above has: that the file has the MARK in it.
+   *
+   * Not hypothetical. The first raster set shipped blank — `favicon-96.png` and
+   * the PNG inside `favicon.ico` were 96x96 of pure RGBA(0,0,0,0), because the
+   * headless-Chrome capture that drew them returned an empty canvas under
+   * `--default-background-color=00000000`. Every test above passed: the files
+   * existed, they were square, the crawler's was 96, the ICO header was well
+   * formed. Google served the placeholder circle for two days. Existence and
+   * geometry say nothing about ink, so this counts it.
+   *
+   * The count is exact rather than a floor. Each of the SVG's 21 blocks is
+   * `size / 12` pixels square, so the ink area is fully determined — which
+   * catches a partial render as well as an empty one, and pins the rasters to
+   * the SVG's geometry instead of to a number written here.
+   */
+  test("the rasters actually contain the mark, not an empty square", () => {
+    const svg = readFileSync(join(PUBLIC, "favicon.svg"), "utf8");
+    const blocks = [...svg.matchAll(/<rect[^>]*width="(\d+)"[^>]*height="(\d+)"/g)].length;
+    const fill = /<svg[^>]*\sfill="(#[0-9a-f]{6})"/.exec(svg)![1];
+    const ink = [0, 2, 4].map((i) => parseInt(fill.slice(i + 1, i + 3), 16));
+
+    for (const href of declared.filter((h) => h.endsWith(".png"))) {
+      const { width, channels, pixels } = decodePng(readFileSync(join(PUBLIC, href)));
+      let inked = 0;
+      for (let i = 0; i < pixels.length; i += channels) {
+        const opaque = channels === 4 ? pixels[i + 3] > 0 : true;
+        if (opaque && ink.every((v, c) => pixels[i + c] === v)) inked++;
+      }
+      const block = width / 12;
+      expect({ href, inked }).toEqual({ href, inked: blocks * block * block });
+    }
   });
 
   /** The source all four are rendered from. A non-square viewBox would letterbox
