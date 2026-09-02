@@ -9,8 +9,16 @@
      the stream's palette.
 
      web/test/palette.test.ts pins this value to the palette: re-sample the stream
-     and the test fails until this file is updated too. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#bf684d" shape-rendering="crispEdges">
+     and the test fails until this file is updated too.
+
+     width/height repeat the viewBox on purpose. A browser sizes a viewBox-only
+     SVG from its container, but a rasteriser has no container: without an
+     intrinsic size it falls back to the CSS default replaced size (300x150) and
+     the 24-unit drawing lands as a speck in the corner. Google's cached icon for
+     https://earwitness.fyi was exactly that — 24 inked pixels of 4096, bottom
+     right, where the raster has 14.6% — so this is an observed failure, not a
+     precaution. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#bf684d" shape-rendering="crispEdges">
   <rect x="4" y="14" width="2" height="2" />
   <rect x="6" y="14" width="2" height="2" />
   <rect x="8" y="14" width="2" height="2" />

@@ -56,10 +56,16 @@ const canonical = absolute(Astro.url.pathname);
         pixels, so 48 is the smallest honest entry to downscale from.
 
         Rendered from the SVG by `bun run icons`, never by hand — a blank
-        raster is a valid PNG, and one shipped. See scripts/render-icons.ts. */}
+        raster is a valid PNG, and one shipped. See scripts/render-icons.ts.
+
+        The crawler's PNG is `icon-96.png`, not the `favicon-96.png` it replaces:
+        Google's favicon cache is keyed by URL, so correcting the bytes under a
+        path it had already fetched changed nothing it would ever look at. It is
+        also opaque now — a transparent one gets composited onto a background of
+        Google's choosing, and that is one more thing to be wrong. */}
     <link rel="icon" href="/favicon.ico" sizes="48x48 96x96" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/icon-96.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     {/* Roboto Mono, Apache-2.0. The `--font-mono` token puts the

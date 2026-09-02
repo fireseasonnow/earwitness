@@ -28,7 +28,17 @@ import { join } from "node:path";
 
 const PUBLIC = join(import.meta.dir, "..", "public");
 
-/** iOS composites a transparent icon onto black, so this one gets the paper. */
+/**
+ * The background for the two icons that are composited by someone else.
+ *
+ * iOS composites a transparent touch icon onto BLACK. Google composites a
+ * transparent favicon onto a colour of its own choosing, and picked this one —
+ * the page's `theme-color` — when it built the cached icon for the https URL.
+ * Handing both an opaque raster takes the choice away from them.
+ *
+ * `favicon.ico` stays transparent: it is read by browser chrome, whose tab strip
+ * is dark as often as light, and a paper square there is worse than no square.
+ */
 const PAPER = "#f5f3ed";
 
 interface Mark {
@@ -167,8 +177,19 @@ const mark = readMark();
 const png = (size: number, bg: string | null) =>
   encodePng(draw(mark, size, bg), size, bg === null);
 
+/**
+ * `icon-96.png` and not `favicon-96.png`, which it replaces.
+ *
+ * The bytes at that path had already been fixed and redeployed, and Google went
+ * on serving the placeholder: its favicon cache is keyed by URL, so a file that
+ * changes underneath a path it has already fetched is a file it has no reason to
+ * fetch again. A name it has never seen is the only part of this that Google
+ * cannot ignore. Renaming again later would mean the same thing went wrong twice
+ * — check the cache first: t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&
+ * url=https%3A%2F%2Fearwitness.fyi&size=64 returns what Google will actually draw.
+ */
 const wrote: [string, Uint8Array][] = [
-  ["favicon-96.png", png(96, null)],
+  ["icon-96.png", png(96, PAPER)],
   ["favicon.ico", encodeIco([48, 96].map((size) => ({ size, png: png(size, null) })))],
   ["apple-touch-icon.png", png(180, PAPER)],
 ];

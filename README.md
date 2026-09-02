@@ -334,13 +334,40 @@ fractional pixel. That rules out 16 and 32, which is why the `.ico` holds 48 and
 96 and lets the browser downscale for the tab strip; both entries are also the
 multiple of 48 an image crawler asks for.
 
-The two background colours are the whole subtlety. The crawler's PNG is cut out,
-because a search result may sit on either ground; the touch icon is opaque on the
-palette's paper, because iOS composites a transparent one onto **black** — and it
-is written without an alpha channel at all, not merely with alpha at 255, since
-that is what a reader checks to decide. The `.ico` is a container around the same
-PNGs, which is what every reader since Vista expects, and it exists because
-`/favicon.ico` is requested by path whatever the markup declares.
+The background colours are the whole subtlety, and the rule is that whoever
+composites the icon decides what is behind it — so the two icons read by someone
+else are opaque and the one read by browser chrome is not. The touch icon is on
+the palette's paper because iOS composites a transparent one onto **black**;
+`icon-96.png` is on the same paper because Google composites a transparent one
+onto a colour of its own choosing, and chose the page's `theme-color`. Both are
+written without an alpha channel at all, not merely with alpha at 255, since that
+is what a reader checks to decide. The `.ico` keeps its transparency: a tab strip
+is dark as often as light, and a paper square there is worse than no square. It
+is a container around the same PNGs, which is what every reader since Vista
+expects, and it exists because `/favicon.ico` is requested by path whatever the
+markup declares.
+
+**Two things about that blank icon that only showed up afterwards**, both worth
+knowing before the next icon change:
+
+*Fixing the bytes was not enough.* The corrected rasters went live at the same
+paths, and Google went on drawing the placeholder — its favicon cache is keyed by
+URL, and a file that changes underneath a path it has already fetched is a file
+it has no reason to fetch again. That is why the crawler's PNG is now
+`icon-96.png` rather than `favicon-96.png`. Before renaming anything a second
+time, look at what Google actually holds, which is public:
+
+```bash
+curl -s 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&url=https%3A%2F%2Fearwitness.fyi&size=64' -o /tmp/g.png
+```
+
+*The SVG rendered wrong everywhere the raster did not.* It declared a `viewBox`
+and no `width`/`height`, which costs nothing in a browser — an `<img>` or a
+`<link>` gives it a box to fill — but a rasteriser has no box, falls back to the
+CSS default replaced size of 300x150, and puts 24 units of drawing in a corner of
+it. Google's cached icon for the https URL was that render: the mark at a quarter
+scale in the bottom right, 24 inked pixels where the raster has 1344. The size is
+declared now and `metadata.test.ts` pins it to the viewBox.
 
 `metadata.test.ts` holds all of it: that each declared icon is on disk, that the
 rasters are square, that the touch icon has no alpha channel — and, since none of

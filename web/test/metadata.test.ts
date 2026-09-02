@@ -320,7 +320,7 @@ describe("the icons in the head are the icons on disk", () => {
   test("the head declares the raster set, not the SVG alone", () => {
     expect(declared).toContain("/favicon.ico");
     expect(declared).toContain("/favicon.svg");
-    expect(declared).toContain("/favicon-96.png");
+    expect(declared).toContain("/icon-96.png");
     expect(declared).toContain("/apple-touch-icon.png");
   });
 
@@ -336,7 +336,7 @@ describe("the icons in the head are the icons on disk", () => {
       const [w, h] = [png.readUInt32BE(16), png.readUInt32BE(20)];
       expect(w).toBe(h);
     }
-    const crawler = readFileSync(join(PUBLIC, "favicon-96.png"));
+    const crawler = readFileSync(join(PUBLIC, "icon-96.png"));
     expect(crawler.readUInt32BE(16)).toBe(96);
     expect(96 % 48).toBe(0);
   });
@@ -395,5 +395,28 @@ describe("the icons in the head are the icons on disk", () => {
     const box = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
     expect(box).not.toBeNull();
     expect(box![1]).toBe(box![2]);
+  });
+
+  /**
+   * The other way this file has already been drawn wrong.
+   *
+   * A browser sizes a viewBox-only SVG from the box it is placed in, so the
+   * missing width/height cost nothing anywhere it was being looked at. A
+   * rasteriser has no such box: lacking an intrinsic size it uses the CSS
+   * default replaced size, 300x150, and renders 24 units of drawing into a
+   * corner of it. Google's cached favicon for the https URL was that render —
+   * the mark at a quarter scale in the bottom right of an otherwise empty
+   * square, which at the 16px a result is drawn at is a blank circle.
+   *
+   * So the size has to be declared, and it has to agree with the viewBox the
+   * rasters are scaled from, or the SVG and the PNGs are two different marks.
+   */
+  test("the SVG declares an intrinsic size, and it matches the viewBox", () => {
+    const svg = readFileSync(join(PUBLIC, "favicon.svg"), "utf8");
+    const root = /<svg[^>]*>/.exec(svg)![0];
+    const width = /\swidth="(\d+)"/.exec(root);
+    const height = /\sheight="(\d+)"/.exec(root);
+    const box = /viewBox="0 0 (\d+) (\d+)"/.exec(svg)!;
+    expect({ width: width?.[1], height: height?.[1] }).toEqual({ width: box[1], height: box[2] });
   });
 });
