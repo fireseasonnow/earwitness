@@ -361,7 +361,7 @@ describe("palette — no colour without a call site", () => {
  */
 describe("palette — the literals outside the theme", () => {
   const layout = readFileSync(join(WEB, "src", "layouts", "Layout.astro"), "utf8");
-  const favicon = readFileSync(join(WEB, "public", "favicon.svg"), "utf8");
+  const favicon = readFileSync(join(WEB, "public", "icon.svg"), "utf8");
   /** The social card's source. What ships is the PNG rendered from it. */
   const card = readFileSync(join(WEB, "..", "docs", "og-card.svg"), "utf8");
 

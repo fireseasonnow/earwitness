@@ -5,7 +5,7 @@
 
      It is the page's header drawn large, and it names no song and no state —
      every platform caches the card it fetches, so a claim about the air would go
-     stale inside it. Colours are literals here for the same reason favicon.svg's
+     stale inside it. Colours are literals here for the same reason icon.svg's
      is, and web/test/palette.test.ts holds each one to the token it copies.
      Roboto Mono is fetched at render time: check the face in the PNG.
 

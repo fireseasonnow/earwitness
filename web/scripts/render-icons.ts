@@ -1,5 +1,5 @@
 /**
- * The raster icons, drawn from `public/favicon.svg` so they cannot drift from it.
+ * The raster icons, drawn from `public/icon.svg` so they cannot drift from it.
  *
  * This exists because the first raster set was made by hand and shipped BLANK:
  * `favicon-96.png` and `favicon.ico` were 96x96 of pure RGBA(0,0,0,0), which is
@@ -60,15 +60,15 @@ function parseHex(hex: string): [number, number, number] {
  * this file answers is two representations of one mark disagreeing in silence.
  */
 function readMark(): Mark {
-  const svg = readFileSync(join(PUBLIC, "favicon.svg"), "utf8");
+  const svg = readFileSync(join(PUBLIC, "icon.svg"), "utf8");
   const viewBox = /viewBox="0 0 (\d+) (\d+)"/.exec(svg);
   const fill = /<svg[^>]*\sfill="(#[0-9a-fA-F]{6})"/.exec(svg);
-  if (viewBox === null || fill === null) throw new Error("favicon.svg: no viewBox or root fill");
-  if (viewBox[1] !== viewBox[2]) throw new Error("favicon.svg: viewBox is not square");
+  if (viewBox === null || fill === null) throw new Error("icon.svg: no viewBox or root fill");
+  if (viewBox[1] !== viewBox[2]) throw new Error("icon.svg: viewBox is not square");
   const rects = [...svg.matchAll(/<rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)"/g)].map(
     (m) => ({ x: +m[1], y: +m[2], w: +m[3], h: +m[4] }),
   );
-  if (rects.length === 0) throw new Error("favicon.svg: no rects");
+  if (rects.length === 0) throw new Error("icon.svg: no rects");
   return { extent: +viewBox[1], fill: parseHex(fill[1]), rects };
 }
 
@@ -178,7 +178,9 @@ const png = (size: number, bg: string | null) =>
   encodePng(draw(mark, size, bg), size, bg === null);
 
 /**
- * `icon-96.png` and not `favicon-96.png`, which it replaces.
+ * `icon-96.png` and not `favicon-96.png`, which it replaces — and see
+ * `public/icon.svg`, renamed from `favicon.svg` for the same reason and in the
+ * same breath, because renaming only this one left the fault in place.
  *
  * The bytes at that path had already been fixed and redeployed, and Google went
  * on serving the placeholder: its favicon cache is keyed by URL, so a file that

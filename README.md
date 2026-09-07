@@ -311,7 +311,7 @@ CARD=$(bun -e 'import {CARD} from "./web/src/lib/metadata"; process.stdout.write
 Then `git rm` the card it replaced — the old URL is dead the moment the constant
 moves, and two PNGs in `public/` is one of them going stale unnoticed.
 
-**Redrawing the icons.** `web/public/favicon.svg` is the source for all four,
+**Redrawing the icons.** `web/public/icon.svg` is the source for all four,
 and the rasters are regenerated from it with:
 
 ```bash
@@ -353,13 +353,28 @@ knowing before the next icon change:
 *Fixing the bytes was not enough.* The corrected rasters went live at the same
 paths, and Google went on drawing the placeholder — its favicon cache is keyed by
 URL, and a file that changes underneath a path it has already fetched is a file
-it has no reason to fetch again. That is why the crawler's PNG is now
-`icon-96.png` rather than `favicon-96.png`. Before renaming anything a second
-time, look at what Google actually holds, which is public:
+it has no reason to fetch again. That is why the crawler's PNG is `icon-96.png`
+rather than `favicon-96.png`, and the source is `icon.svg` rather than
+`favicon.svg`.
+
+Both had to move, which took two attempts to learn. The PNG was renamed first and
+nothing changed for five days, because the render Google was actually serving had
+come from the **SVG** — still sitting at its original URL, still handing back the
+same bad raster. Rename every file a stale render could have come from, not the
+one that looks likeliest. Before renaming anything a third time, look at what
+Google actually holds, which is public:
 
 ```bash
-curl -s 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&url=https%3A%2F%2Fearwitness.fyi&size=64' -o /tmp/g.png
+# Sweep sizes, and pass fallback_opts: the buckets disagree, and the variant a
+# search result draws is the one that hid a broken render for five days.
+for s in 16 32 64; do
+  curl -s "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https%3A%2F%2Fearwitness.fyi&size=$s" -o "/tmp/g-$s.png"
+done
 ```
+
+A paper-coloured square with about 1% ink is the bad render; the mark fills
+14.6%. A blue-grey globe is Google's generic fallback, meaning it holds nothing
+for that bucket.
 
 *The SVG rendered wrong everywhere the raster did not.* It declared a `viewBox`
 and no `width`/`height`, which costs nothing in a browser — an `<img>` or a

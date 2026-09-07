@@ -319,7 +319,7 @@ describe("the icons in the head are the icons on disk", () => {
 
   test("the head declares the raster set, not the SVG alone", () => {
     expect(declared).toContain("/favicon.ico");
-    expect(declared).toContain("/favicon.svg");
+    expect(declared).toContain("/icon.svg");
     expect(declared).toContain("/icon-96.png");
     expect(declared).toContain("/apple-touch-icon.png");
   });
@@ -371,7 +371,7 @@ describe("the icons in the head are the icons on disk", () => {
    * the SVG's geometry instead of to a number written here.
    */
   test("the rasters actually contain the mark, not an empty square", () => {
-    const svg = readFileSync(join(PUBLIC, "favicon.svg"), "utf8");
+    const svg = readFileSync(join(PUBLIC, "icon.svg"), "utf8");
     const blocks = [...svg.matchAll(/<rect[^>]*width="(\d+)"[^>]*height="(\d+)"/g)].length;
     const fill = /<svg[^>]*\sfill="(#[0-9a-f]{6})"/.exec(svg)![1];
     const ink = [0, 2, 4].map((i) => parseInt(fill.slice(i + 1, i + 3), 16));
@@ -391,7 +391,7 @@ describe("the icons in the head are the icons on disk", () => {
   /** The source all four are rendered from. A non-square viewBox would letterbox
       every raster below it without changing a single declared dimension. */
   test("the SVG they are all drawn from is square", () => {
-    const svg = readFileSync(join(PUBLIC, "favicon.svg"), "utf8");
+    const svg = readFileSync(join(PUBLIC, "icon.svg"), "utf8");
     const box = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
     expect(box).not.toBeNull();
     expect(box![1]).toBe(box![2]);
@@ -412,7 +412,7 @@ describe("the icons in the head are the icons on disk", () => {
    * rasters are scaled from, or the SVG and the PNGs are two different marks.
    */
   test("the SVG declares an intrinsic size, and it matches the viewBox", () => {
-    const svg = readFileSync(join(PUBLIC, "favicon.svg"), "utf8");
+    const svg = readFileSync(join(PUBLIC, "icon.svg"), "utf8");
     const root = /<svg[^>]*>/.exec(svg)![0];
     const width = /\swidth="(\d+)"/.exec(root);
     const height = /\sheight="(\d+)"/.exec(root);
