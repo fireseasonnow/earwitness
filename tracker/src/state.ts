@@ -6,16 +6,15 @@
  *   confirmed.flag  no content; its mtime is the last time the marquee was
  *                   READ as still showing the newest logged play
  *
- * There is no database. After the health and anomaly tables were dropped, every
- * relational feature left was unused — the index covered at most ~480 rows a
- * day, `UNIQUE(raw_unit)` was unreachable because dedup scans by edit distance
- * before inserting, and the foreign key existed only to order the prune. What
- * SQLite genuinely provided was atomic uncorruptible writes, and `writeState`
- * below is the replacement.
+ * There is no database: every relational feature was unused — the index covered
+ * at most ~480 rows a day, `UNIQUE(raw_unit)` was unreachable because dedup
+ * scans by edit distance before inserting, and the foreign key existed only to
+ * order the prune. What SQLite genuinely provided was atomic uncorruptible
+ * writes, and `writeState` below is the replacement.
  *
- * A play stores the observation and nothing derived from it: the
- * clock at the moment of resolution, and the stitched credit. Artist and title
- * are `parseUnit(credit)` and are derived by each reader at the point of use.
+ * A play stores the observation and nothing derived from it: the clock at the
+ * moment of resolution, and the stitched credit. Artist and title are
+ * `parseUnit(credit)`, derived by each reader at the point of use.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -194,15 +193,13 @@ export interface ResolvedCredit {
  *
  * The rotation clause is not defensive programming. The stitcher recovers a
  * *cyclic* string and then guesses where the loop starts; when the ♪ separator
- * OCRs as a plain space there is nothing in the burst that distinguishes the
- * real boundary from a word gap, so consecutive bursts of one song legitimately
- * cut it at different points. Levenshtein rates a rotation as maximally
- * different — two full copies of the moved text — so plain edit distance filed
- * `Ben Seretan — walls are humming` and `Seretan — walls are humming Ben` as
- * two songs and logged the same song three times running. The tick fingerprint
- * (`isSameSong`) already matched rotations against the doubled unit; this is
- * the dedup path agreeing with it, which is the same class of divergence the
- * fingerprint already closed.
+ * OCRs as a plain space nothing in the burst distinguishes the real boundary
+ * from a word gap, so consecutive bursts of one song legitimately cut it at
+ * different points. Levenshtein rates a rotation as maximally different, so
+ * plain edit distance filed `Ben Seretan — walls are humming` and `Seretan —
+ * walls are humming Ben` as two songs and logged one song three times running.
+ * The tick fingerprint (`isSameSong`) already matches rotations against the
+ * doubled unit; this is the dedup path agreeing with it.
  *
  * Allocates nothing and mutates nothing. Two properties matter:
  *

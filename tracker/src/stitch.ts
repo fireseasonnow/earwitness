@@ -355,9 +355,9 @@ interface FrameAt {
  * `Rana Singerss` five times over two days, each time flagging nothing worse
  * than the single no-majority column it had already smoothed over.
  *
- * A raw frame has no such smear: it is one reading of one repetition. A unit
- * one character too long has to spell that character into every frame that
- * crosses the loop boundary, and none of them contain it.
+ * A raw frame has no such smear: it is one reading of one repetition, and a unit
+ * one character too long must spell that character into every frame crossing the
+ * loop boundary, where none of them contain it.
  *
  * `gap` is the separator AS RENDERED, which is why it is searched rather than
  * taken from the candidate: the same 2-column ♪ reads as 1 character in one

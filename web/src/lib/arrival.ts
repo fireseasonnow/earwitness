@@ -4,23 +4,23 @@
  *
  * Traffic telemetry obeys the rule the failure counts obey: a reader cannot act
  * on it, so it goes to the journal where the operator is — never onto the page,
- * and never into `$EARWITNESS_STATE`, which holds one day of plays and nothing
- * about whoever read them.
+ * and never into `$EARWITNESS_STATE`.
  *
  * **These lines are a sample, by construction.** Only origin renders reach this
  * code, and `EDGE_TTL_SECONDS` bounds those at roughly six a minute per colo
- * however large the audience. Whether a given request is the one that misses the
- * cache is independent of where it came from, so PROPORTIONS stay honest ("a
- * third of arrivals came from HN") while absolute counts do not. The totals live
- * in Cloudflare's own edge counters, which see every request and cost nothing.
+ * however large the audience. Whether a request is the one that misses the cache
+ * is independent of where it came from, so PROPORTIONS stay honest while absolute
+ * counts do not; the totals live in Cloudflare's own edge counters.
  *
  * **Every field is a bucket, never a value:** a browser family rather than a
  * version, a country and a timezone rather than a city, no IP and no raw
  * user-agent string anywhere. A bucket describes a population; the raw values,
  * joined on one timestamped line, describe a person. This module is the only
  * place a request header is read, and it returns unions and validated tokens
- * rather than passing text through — so the anonymity is a property of the type
- * signatures, not of a convention someone has to remember.
+ * rather than passing text through, so the anonymity is a property of the
+ * signatures — `test/arrival.test.ts` asserts it mechanically, that a phone's
+ * model, OS build and browser version cannot survive into a line built from its
+ * own user agent.
  */
 
 import { ORIGIN } from "./metadata";
@@ -95,9 +95,8 @@ function printable(value: string, maxLen: number): string {
  * real sources, and their hostname is the app. A referrer with no hostname at all
  * (`about:blank`, `data:`) carries no source and joins `direct`.
  *
- * `selfHostnames` is every name this site answers to at once, because "a
- * referrer pointing back at us" is one idea however many hostnames reach the
- * process.
+ * `selfHostnames` is every name this site answers to at once: "a referrer
+ * pointing back at us" is one idea however many hostnames reach the process.
  */
 export function refererSource(
   referer: string | null,
@@ -124,11 +123,10 @@ export function refererSource(
  * Mastodon clients and mail readers routinely send no referrer at all, so a
  * `direct` line and a link we placed by hand are otherwise indistinguishable.
  *
- * A tag costs the edge nothing: the page's cache key carries the route alone —
- * the same decision the canonical in `metadata.ts` rests on — so every tag shares
- * one entry instead of fragmenting the cache, and a tagged arrival is sampled
- * exactly like any other. The tag is read off this request's own URL, which the
- * origin always receives in full whatever the cache key ignores.
+ * A tag costs the edge nothing: the cache key carries the route alone — the same
+ * decision the canonical in `metadata.ts` rests on — so every tag shares one
+ * entry, and the tag is read off this request's own URL, which the origin
+ * receives in full whatever the cache key ignores.
  *
  * Rejected rather than scrubbed: a tag is something WE chose, so a value outside
  * `[a-z0-9_-]` is not a mangled tag, it is a stranger's input, and it is not
@@ -225,12 +223,11 @@ function deviceKind(ua: string): Device {
  * Family, and `chrome` means the Chromium family — Edge, Opera and Samsung
  * Internet included.
  *
- * That is not laziness about brands: the single action attached to this field is
- * `color-scheme: only light` in `global.css`, which exists because Chromium
- * darkens a light page that declares no scheme. It is a family behaviour, so the
- * family is the bucket. `mobile` + `chrome` is an upper bound on the share that
- * override protects, and an upper bound is enough to decide whether it still
- * earns its place — which is why no `os` field is collected.
+ * The single action attached to this field is `color-scheme: only light` in
+ * `global.css`, which exists because Chromium darkens a light page declaring no
+ * scheme. It is a family behaviour, so the family is the bucket: `mobile` +
+ * `chrome` upper-bounds the share that override protects, which is enough to
+ * decide whether it still earns its place — hence no `os` field.
  *
  * Order is load-bearing twice: every Chromium UA also says `Safari`, and Edge and
  * Opera also say `Chrome`.
@@ -305,10 +302,10 @@ export function describeArrival(url: URL, headers: Headers): Arrival | null {
  * One event name and seven `key=value` fields, space-separated, in a fixed
  * order.
  *
- * The format is the interface: the README's `awk` one-liners split on spaces and
- * pick fields by prefix, which is why no field may ever contain a space and why
- * `NONE` fills a gap instead of an empty value. Adding a field is safe; letting
- * one carry a space is not, and a test pins that.
+ * The format is the interface: anything reading these lines back splits on
+ * spaces and picks fields by prefix, which is why no field may ever contain a
+ * space and why `NONE` fills a gap instead of an empty value. Adding a field is
+ * safe; letting one carry a space is not, and a test pins that.
  */
 export function formatArrival(a: Arrival): string {
   return (

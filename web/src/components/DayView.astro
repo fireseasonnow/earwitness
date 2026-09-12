@@ -80,7 +80,9 @@ const hero = heroFor(state);
       class="text-terra-text underline hover:text-terra-hover">Claude FM</a
     >, Anthropic's 24/7 stream, and logs what it hears: the stream publishes no tracklist, and
     a single frame never shows a whole credit, so the tracker reads a burst and reconstructs
-    the line. The log holds one Amsterdam day and starts again empty at midnight. Track names
+    the line. The log holds one Amsterdam day and starts again empty at midnight. Visits are
+    counted in buckets only — no IP address, no raw user-agent string, no city — because a
+    bucket describes a population where the raw values describe a person. Track names
     belong to their respective artists. Source on <a
       href="https://github.com/fireseasonnow/earwitness"
       class="text-terra-text underline hover:text-terra-hover">GitHub</a

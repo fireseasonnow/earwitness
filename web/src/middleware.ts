@@ -4,8 +4,8 @@ import { describeArrival, formatArrival, isPageView } from "./lib/arrival";
 /**
  * One journal line per arrival. The whole of the traffic telemetry.
  *
- * What the rules are and why each field is a bucket: `lib/arrival.ts`. How to
- * read the lines back: the README's Traffic section.
+ * What the rules are and why each field is a bucket: `lib/arrival.ts`. The
+ * lines are read back out of the journal with `journalctl`.
  *
  * The tracker's line format, mirrored deliberately — `<ISO timestamp> <event>
  * <detail>` — so that `journalctl -o cat -u <web-unit> -u <tracker-unit>`

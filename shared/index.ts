@@ -2,10 +2,12 @@
  * Code both processes must agree on, and nothing else.
  *
  * The tracker writes `plays.json`; the web app reads it. They deploy from one
- * checkout but run as two systemd units, so anything they must agree about is an
- * unenforced contract unless it has exactly one definition. Two such agreements
- * exist: where the state directory is, and how a credit splits into artist and
- * title. Both live here.
+ * checkout but run as two supervised processes, so anything they must agree
+ * about is a contract nothing enforces unless it has exactly one definition.
+ * Two such agreements exist: where the state directory is, and how a credit
+ * splits into artist and title. Both live here, and
+ * `shared/test/no-reimplementation.test.ts` greps the tree for a second
+ * implementation of the parse rule rather than trusting the convention.
  *
  * Scope is deliberately narrow — pure functions and constants. No filesystem, no
  * I/O, no config loading. A module that reads anything would make this a third

@@ -25,7 +25,7 @@
    * The `-text` suffix marks the tier that may set type, and it too is checked:
    * a `-text` token clears 4.5:1 — with one accepted exception, below.
    *
-   * Re-sample after a scene redesign: see "Design" in the README.
+   * Re-sample after a scene redesign: see `docs/field-notes.md`.
    */
   --color-paper: #f5f3ed;              /* ground · sampled                          */
   --color-ink: #2a2822;                /* body, halftone · sampled           13.3:1 */

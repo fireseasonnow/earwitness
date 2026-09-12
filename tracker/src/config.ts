@@ -2,9 +2,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { resolveStateDir } from "@earwitness/shared";
 
-// All capture constants were measured live (see README).
-// Do not re-derive them; if the overlay ever moves, re-locate the crop with
-// the full-frame command in the README and update `crop` here.
+// All capture constants were measured live. Do not re-derive them; if the
+// overlay ever moves, re-locate the crop with the full-frame command in
+// `docs/field-notes.md` and update `crop` here.
 export const CONFIG = {
   livePageUrl: "https://www.youtube.com/@claude/live",
   /**
@@ -30,8 +30,8 @@ export const CONFIG = {
    * crop's 146/150.
    *
    * If the overlay ever moves, re-derive BOTH bounds — the glyph envelope and
-   * the terrain's reach — with the row-profile command in the README. Do not
-   * simply re-centre on the text.
+   * the terrain's reach — with the row-profile command in `docs/field-notes.md`.
+   * Do not simply re-centre on the text.
    */
   crop: "crop=520:46:1390:42", // credit ticker at 1080p
 
@@ -107,12 +107,11 @@ export const CONFIG = {
   creditDedupMaxEdits: 2, // credit dedup budget
 
   /*
-   * Forensics live in the journal, not in a stored trail, so there
-   * is no trail size to configure here. Set SystemMaxUse generously on the host:
-   * the journal is the only record, and it is bounded by size, not by count.
-   * EARWITNESS_STATE names a DIRECTORY holding plays.json and live.flag. Its
-   * default lives in the shared module, because the web app must resolve the
-   * same one and a copy is an agreement nothing enforces.
+   * Forensics live in the journal, not in a stored trail, so there is no trail
+   * size to configure here. EARWITNESS_STATE names a DIRECTORY holding
+   * plays.json and live.flag; its default lives in the shared module, because
+   * the web app must resolve the same one and a copy is an agreement nothing
+   * enforces.
    */
   stateDir: resolveStateDir(),
   frameDir: join(tmpdir(), "earwitness-frames"),

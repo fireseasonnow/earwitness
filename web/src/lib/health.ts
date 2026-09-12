@@ -2,15 +2,12 @@ import type { LiveFlag, PlayView } from "./state";
 
 /**
  * Derived display states. The tracker records facts; this decides what they
- * mean, so the staleness policy lives here rather than in the
- * tracker.
+ * mean, so the staleness policy lives here rather than in the tracker. The
+ * words are `presentation.ts`'s job, so a copy edit never touches the module
+ * holding the thresholds.
  *
- * Six states from a one-byte file and the play list. Each carries only the
- * facts that state needs — the words are `presentation.ts`'s job, so a copy
- * edit never touches the module holding the thresholds.
- *
- * Every state except `starting_up` still renders whatever was already captured.
- * A problem must never hide songs the tracker got right earlier in the day.
+ * Every state except `starting_up` still renders whatever was already captured:
+ * a problem must never hide songs the tracker got right earlier in the day.
  */
 export type DisplayState =
   | { kind: "starting_up" }
@@ -42,12 +39,9 @@ const STALE_MS = 3 * 60 * 1000;
  * goes on being confirmed every tick. Hence the guard below, not a longer
  * threshold — the 28-minute stall confirmed nothing, and would still be caught.
  *
- * This used to be the *last* warning in a chain that began with a failure count
- * (the old `degraded` state). It is now the only one — that count was operator
- * telemetry a viewer could not act on, and it lives in the journal instead. A
- * "ticker unreadable" state maps here too, with the silence reported and the
- * count left out. If this proves too slow in the soak, lower it; do not
- * reinstate the counter.
+ * This is the only warning now; the old `degraded` failure count was operator
+ * telemetry a viewer could not act on and lives in the journal instead. If this
+ * proves too slow in the soak, lower it; do not reinstate the counter.
  */
 const STALL_MS = 15 * 60 * 1000;
 
@@ -74,12 +68,8 @@ const CONFIRM_WINDOW_MS = 3 * 60 * 1000;
  * Ten minutes, not the six this used to be. Six came from "songs run 2-4 min,
  * detection lags <= ~3", but observed gaps between detections reach 7 minutes
  * with the song demonstrably still on the marquee, so six declared a playing
- * song stale. This path is now the exception rather than the rule, and it errs
- * towards the claim the confirmation flag would have supported.
- *
- * One constant, two consumers: the hero's claim that something is playing now
- * and the list's "now" badge. They are computed once here so they cannot
- * disagree.
+ * song stale. One constant, two consumers — the hero's claim and the list's
+ * "now" badge — computed once here so they cannot disagree.
  */
 const NOW_WINDOW_MS = 10 * 60 * 1000;
 
