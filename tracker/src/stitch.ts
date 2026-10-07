@@ -523,9 +523,18 @@ function stitchAligned(fragments: string[]): StitchResult {
   const evaluate = (c: SeparatorCandidate) =>
     doubled.slice(c.start + c.len, c.start + period);
 
-  // 5a. Pause anchors: consecutive near-identical frames mean the marquee
-  //     held at the unit start — their aligned offset IS the rotation point.
+  /*
+   * 5a. Pause anchors: consecutive near-identical frames mean the marquee
+   *     held at the unit start — their aligned offset IS the rotation point.
+   *
+   *     Ranked by how many pairs vouch for each start, not by which came first.
+   *     A stalled stream repeats a frame mid-scroll and that reads as one pause
+   *     pair anywhere in the credit, while the real hold yields 2-4 pairs every
+   *     loop: on 2026-10-07 a lone "Second Sister David Swense" pair came first
+   *     in its burst and outranked nine pairs on "David Swensen".
+   */
   const anchorCands: SeparatorCandidate[] = [];
+  const anchorSupport = new Map<number, number>();
   const seenStarts = new Set<number>();
   for (let i = 1; i < placements.length; i++) {
     const a = placements[i - 1];
@@ -539,11 +548,14 @@ function stitchAligned(fragments: string[]): StitchResult {
       const len = sepLenBefore(doubled, anchor + period);
       if (len === 0) continue;
       const start = (((anchor - len) % period) + period) % period;
+      anchorSupport.set(start, (anchorSupport.get(start) ?? 0) + 1);
       if (seenStarts.has(start)) continue;
       seenStarts.add(start);
       anchorCands.push({ start, len });
     }
   }
+  // Stable, so equally supported anchors keep their order of appearance.
+  anchorCands.sort((a, b) => (anchorSupport.get(b.start) ?? 0) - (anchorSupport.get(a.start) ?? 0));
 
   // 5b. Separator artifacts in the folded consensus.
   const glyphCands = [

@@ -221,3 +221,21 @@ describe("double-period rotations", () => {
     expect(timesRepeated(stitch(frags).unit)).toBeLessThan(2);
   });
 });
+
+describe("the boxed overlay of 2026-09-24 — a fixed ♪ icon, no glyph in the loop gap", () => {
+  /*
+   * Both bursts were captured through the re-derived crop, which leaves the icon
+   * out, so the pause anchors are the only evidence of where the credit starts.
+   */
+  test("fixture 15 — a stalled frame mid-scroll does not outvote the real pause", async () => {
+    const frags = await loadFixture("fixture15-stalled-frame-pause.txt");
+    expect(stitch(frags).unit).toBe("David Swensen — 08 - Second Sister");
+  });
+
+  test("fixture 16 — a 66-character credit rotates on its pause, confidently", async () => {
+    const frags = await loadFixture("fixture16-boxed-overlay-long-credit.txt");
+    const res = stitch(frags);
+    expect(res.unit).toBe("Cameron Smith — 03 - Every Goodbye Is a Chance for New Universes");
+    expect(res.confident).toBe(true);
+  });
+});
