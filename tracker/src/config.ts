@@ -32,8 +32,29 @@ export const CONFIG = {
    * If the overlay ever moves, re-derive BOTH bounds — the glyph envelope and
    * the terrain's reach — with the row-profile command in `docs/field-notes.md`.
    * Do not simply re-centre on the text.
+   *
+   * The x bounds were re-derived when the overlay was redesigned at ~14:40 UTC
+   * on 2026-09-24. The ticker became an opaque dark box (x 1376-1861, y 38-98)
+   * with a STATIC ♪ icon at x 1398-1416 and the scrolling text masked to
+   * x 1440-1840; measured identical over 84 frames spanning 7 min, and at 16
+   * spot checks over 5 min more, on 2026-10-07. The old x 1390-1910 swallowed
+   * both edges: tesseract read the icon as a fixed `dd` prefix and the box edge
+   * as a fixed `_` suffix on every frame. The prefix moved each pause frame's
+   * start off the credit's first character, which cost the stitcher its pause
+   * anchors, and with the ♪ gone from the loop gap there was nothing else to
+   * rotate on. Unanchored rotations went from ~10 a day to ~405 (88% of plays),
+   * and rows read "Collective — 01 - Beginnings Keen".
+   *
+   * This is x 1428-1852: 12 px clear of the icon, 12 px of box beyond each end
+   * of the text window, and 9 px inside the box's right edge. Measure with a
+   * crop that fits inside the frame: ffmpeg silently shifts one that overhangs
+   * the right edge, and every x read off it is then wrong by the overhang. Over
+   * the 7 min recording replayed as 27 overlapping bursts, the old crop cut 19
+   * of them in the wrong place and the other 8 right only by luck, every one
+   * unanchored; this one cut all 27 correctly. The y bounds are unchanged and sit inside the box, which now
+   * hides the terrain on its own.
    */
-  crop: "crop=520:46:1390:42", // credit ticker at 1080p
+  crop: "crop=424:46:1428:42", // credit ticker at 1080p
 
   tickIntervalMs: 30_000,
   /*

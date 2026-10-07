@@ -16,17 +16,17 @@ of `crop` and the burst timings.
 URL=$(yt-dlp -g 'https://www.youtube.com/@claude/live' | head -1)
 
 # single tick by hand: one cropped frame + OCR
-ffmpeg -loglevel error -i "$URL" -frames:v 1 -vf "crop=520:46:1390:42" -y tick.png \
+ffmpeg -loglevel error -i "$URL" -frames:v 1 -vf "crop=424:46:1428:42" -y tick.png \
   && tesseract tick.png stdout --psm 7
 
 # burst: two full marquee loops (stitcher input, as the tracker takes it)
-ffmpeg -loglevel error -t 30 -i "$URL" -vf "crop=520:46:1390:42,fps=2" -y tick_%02d.png
+ffmpeg -loglevel error -t 30 -i "$URL" -vf "crop=424:46:1428:42,fps=2" -y tick_%02d.png
 
 # fair A/B of any filter change: record once, apply filters to identical frames
 ffmpeg -loglevel error -t 12 -i "$URL" -c copy -y sample.ts
 
 # long watch (transitions, drift): 8 min @ 0.5 fps
-ffmpeg -loglevel error -t 480 -i "$URL" -vf "crop=520:46:1390:42,fps=1/2" -y t_%03d.png
+ffmpeg -loglevel error -t 480 -i "$URL" -vf "crop=424:46:1428:42,fps=1/2" -y t_%03d.png
 ```
 
 **If the overlay ever moves or is redesigned**, grab a full frame, re-locate the
