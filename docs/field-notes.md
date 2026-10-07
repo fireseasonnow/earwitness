@@ -36,29 +36,59 @@ ticker, and update `crop` in `tracker/src/config.ts`:
 ffmpeg -loglevel error -i "$URL" -frames:v 1 -y frame.png
 ```
 
-**Row profile — where the glyphs sit, and where the terrain reaches.** The crop
-has two bounds to satisfy, and neither is guessable from a screenshot: it must
-contain every glyph, and it must exclude the scene's drifting halftone terrain.
-Collapse each frame to one column of row averages and read both off it. Do this
-on the LAPTOP against a recorded sample, not on the server — 300 tesseract calls
-will starve the tracker on a four-core box.
+**Ticker profile — where the box, the icon and the text sit.** Since the
+2026-09-24 redesign the ticker is an opaque dark box with a FIXED ♪ icon at its
+left and the credit scrolling through a masked window to the icon's right. The
+crop has to sit inside the box, clear of the icon on the left and the box edge
+on the right — tesseract reads either as a junk character on every frame, and
+the icon's one costs the stitcher its pause anchors. The box is opaque, so the
+scene's drifting halftone terrain can no longer reach the glyphs; the old
+row profile that measured its reach does not apply to this overlay.
+
+Read all three off the pixels of a recorded sample rather than a screenshot.
+Each printed pair is the (min, max) of that edge across frames: the box and the
+icon must not move, and the text's extremes are the masked window's edges. Do
+this on the LAPTOP — it is cheap, but the OCR that usually follows it is not, and
+300 tesseract calls will starve the tracker on a four-core box.
+
+The band must fit inside the 1920 px frame. ffmpeg silently shifts a crop that
+overhangs the edge, and every x read off it is then wrong by the overhang — that
+cost a wrong first measurement on 2026-10-07.
 
 ```bash
 ffmpeg -loglevel error -t 150 -i "$URL" -c copy -y sample.ts   # record once
-ffmpeg -loglevel error -i sample.ts -vf "crop=520:200:1390:0,fps=2,format=gray,scale=1:200:flags=area" -f rawvideo -pix_fmt gray -y rows.raw
+ffmpeg -loglevel error -i sample.ts -vf "crop=560:120:1360:0,fps=2" -f rawvideo -pix_fmt rgb24 -y band.raw
 python3 - <<'EOF'
-d = open("rows.raw", "rb").read(); H = 200
-tops, bots, terrain = [], [], []
-for i in range(len(d) // H):
-    p = d[i * H:(i + 1) * H]
-    glyph = [y for y in range(40, 105) if p[y] < 250]
-    below = [y for y in range(95, 200) if p[y] < 250]
-    if glyph: tops.append(min(glyph)); bots.append(max(glyph))
-    if below: terrain.append(min(below))
-print("glyphs   y", min(tops), "..", max(bots))
-print("terrain reaches y", min(terrain))
+X0, W, H = 1360, 560, 120  # must match the crop above
+d = open("band.raw", "rb").read(); F = W * H * 3
+lum = lambda p: sum(p) / 3
+box, icon, text = [], [], []
+for i in range(len(d) // F):
+    f = d[i * F:(i + 1) * F]
+    px = lambda x, y: f[(y * W + x) * 3:(y * W + x) * 3 + 3]
+    row = [x for x in range(W) if lum(px(x, 60)) < 45]  # the box is near-black
+    if not row: continue
+    l, r = row[0], row[-1]
+    col = [y for y in range(H) if lum(px(l + 4, y)) < 45]
+    t, b = col[0], col[-1]
+    box.append((l, r, t, b))
+    red = [x for x in range(l, r) for y in range(t, b)
+           if (lambda p: p[0] > 150 and p[1] < 140 and p[0] - p[2] > 60)(px(x, y))]
+    if red: icon.append((min(red), max(red)))
+    lit = [(x, y) for x in range(l, r) for y in range(t, b) if min(px(x, y)) > 150]
+    if lit: text.append((min(x for x, _ in lit), max(x for x, _ in lit),
+                         min(y for _, y in lit), max(y for _, y in lit)))
+span = lambda v, k, dx: (min(e[k] for e in v) + dx, max(e[k] for e in v) + dx)
+print(f"frames {len(box)}")
+print(f"box   x {span(box,0,X0)} .. {span(box,1,X0)}   y {span(box,2,0)} .. {span(box,3,0)}")
+print(f"icon  x {span(icon,0,X0)} .. {span(icon,1,X0)}")
+print(f"text  x {span(text,0,X0)} .. {span(text,1,X0)}   y {span(text,2,0)} .. {span(text,3,0)}")
 EOF
 ```
+
+Measured 2026-10-07, 64 frames: box x 1376..1861, y 38..98; icon x 1398..1416;
+text x 1440..1840, y 60..82. `crop` is x 1428..1852, y 42..87 — inside the box,
+12 px clear of the icon, 12 px beyond each end of the text window.
 
 ## Stitching
 

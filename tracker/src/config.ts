@@ -29,9 +29,14 @@ export const CONFIG = {
    * recorded frames spanning three songs this read 150/150 against the old
    * crop's 146/150.
    *
-   * If the overlay ever moves, re-derive BOTH bounds — the glyph envelope and
-   * the terrain's reach — with the row-profile command in `docs/field-notes.md`.
-   * Do not simply re-centre on the text.
+   * That was the overlay before 2026-09-24, which floated the text over the
+   * scene. Its replacement (below) puts the text in an opaque box, so the
+   * terrain no longer reaches the glyphs; the y bounds stand, and still clear
+   * them.
+   *
+   * If the overlay ever moves, re-derive the crop from the box, the icon and the
+   * text window with the ticker-profile command in `docs/field-notes.md`. Do not
+   * simply re-centre on the text.
    *
    * The x bounds were re-derived when the overlay was redesigned at ~14:40 UTC
    * on 2026-09-24. The ticker became an opaque dark box (x 1376-1861, y 38-98)
