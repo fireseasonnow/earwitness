@@ -51,8 +51,8 @@ export const CONFIG = {
    * the right edge, and every x read off it is then wrong by the overhang. Over
    * the 7 min recording replayed as 27 overlapping bursts, the old crop cut 19
    * of them in the wrong place and the other 8 right only by luck, every one
-   * unanchored; this one cut all 27 correctly. The y bounds are unchanged and sit inside the box, which now
-   * hides the terrain on its own.
+   * unanchored; this one cut all 27 correctly. The y bounds are unchanged and
+   * sit inside the box, which now hides the terrain on its own.
    */
   crop: "crop=424:46:1428:42", // credit ticker at 1080p
 
