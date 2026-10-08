@@ -12,6 +12,7 @@
 import { parseUnit } from "@earwitness/shared";
 import { CONFIG } from "./src/config";
 import { captureBurst, captureTickFrame, ocrFrame } from "./src/capture";
+import { knownSpelling } from "./src/catalogue";
 import {
   StateUnreadableError,
   ensureStateDir,
@@ -316,7 +317,11 @@ async function tick(): Promise<void> {
   // Resolve the credit first, then let the resolved identity decide whether this
   // is a new play — never a string comparison against `currentUnit`.
   const dedupBudget = res.confident ? CONFIG.creditDedupMaxEdits : noisyBudget(res.unit);
-  const { credit, isNew, inserted } = recordPlay(CONFIG.stateDir, res.unit, dedupBudget);
+  const { credit, isNew, inserted } = recordPlay(
+    CONFIG.stateDir,
+    knownSpelling(res.unit),
+    dedupBudget,
+  );
   currentUnit = res.unit; // what the marquee looks like NOW
   // A stitch that resolved is a reading of the marquee, whether or not it
   // produced a row: either way the newest row is the song now playing.
