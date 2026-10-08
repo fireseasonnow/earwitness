@@ -38,7 +38,14 @@ const hero = heroFor(state);
         </span>
       </h1>
     </div>
-    <span class="text-note tracking-meta text-muted md:text-row">{todayDisplay()} · Amsterdam</span>
+    <span class="text-note tracking-meta text-muted md:text-row">
+      {todayDisplay()} · Amsterdam · <a
+        href="https://www.youtube.com/@claude/live"
+        target="_blank"
+        rel="noopener"
+        class="text-terra-text underline hover:text-terra-hover">Listen live</a
+      >
+    </span>
   </header>
 
   {/* Good news and bad news land in the same place, so the reader learns where
