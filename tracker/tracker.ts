@@ -2,7 +2,7 @@
  * Earwitness tracker — logs every song played on the stream into plays.json.
  *
  * Loop (every 30 s): grab one cropped ticker frame → OCR → fingerprint
- * against the current song. Mismatch → 18 s burst → stitch → resolve the credit
+ * against the current song. Mismatch → 30 s burst → stitch → resolve the credit
  * → append play. Ambiguity is reported, never guessed.
  *
  * Abnormal conditions go to stdout only. There is no stored trail, so a log
