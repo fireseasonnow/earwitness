@@ -16,9 +16,12 @@ const PLAY: PlayView = {
   title: "kokosing",
 };
 
+const OFFLINE_TODAY = { lastSeenToday: true, hasPlays: true };
+
 const ALL_STATES: DisplayState[] = [
   { kind: "starting_up" },
-  { kind: "offline", lastSeenAt: new Date("2026-08-23T09:41:12.000Z") },
+  { kind: "offline", ...OFFLINE_TODAY, lastSeenAt: new Date("2026-08-23T09:41:12.000Z") },
+  { kind: "offline", lastSeenAt: new Date("2026-10-31T06:57:39.000Z"), lastSeenToday: false, hasPlays: false },
   { kind: "off_air", lastPlayAt: PLAY.detectedAt },
   { kind: "off_air", lastPlayAt: null },
   { kind: "stalled", silenceMinutes: 22 },
@@ -99,16 +102,36 @@ describe("hero — the on-air states", () => {
 
 describe("hero — the trouble states", () => {
   test("offline names the Amsterdam time it was last heard from", () => {
-    const h = hero({ kind: "offline", lastSeenAt: new Date("2026-08-23T09:41:12.000Z") });
+    const h = hero({
+      kind: "offline",
+      ...OFFLINE_TODAY,
+      lastSeenAt: new Date("2026-08-23T09:41:12.000Z"),
+    });
     expect(h.kicker).toBe("Tracker offline");
     expect(h.headline).toBe("Nothing heard since 11:41 AM");
+    expect(h.detail).toContain("are below");
     expect(h.tone).toBe("attention");
     expect(h.showLog).toBe(true);
   });
 
+  test("offline since an earlier day names the day, and promises no plays", () => {
+    const h = hero({
+      kind: "offline",
+      lastSeenAt: new Date("2026-10-31T06:57:39.000Z"),
+      lastSeenToday: false,
+      hasPlays: false,
+    });
+    expect(h.headline).toBe("Nothing heard since Sat 31 Oct, 07:57 AM");
+    expect(h.detail).toBe("The tracker stopped reporting, and nothing has been logged today.");
+  });
+
   test("winter time shifts the same instant by an hour", () => {
     // Stored UTC, displayed Amsterdam — the offset is not a constant.
-    const h = hero({ kind: "offline", lastSeenAt: new Date("2026-01-15T09:41:12.000Z") });
+    const h = hero({
+      kind: "offline",
+      ...OFFLINE_TODAY,
+      lastSeenAt: new Date("2026-01-15T09:41:12.000Z"),
+    });
     expect(h.headline).toBe("Nothing heard since 10:41 AM");
   });
 

@@ -53,6 +53,27 @@ describe("deriveState — the six states", () => {
     expect(state.kind).toBe("offline");
     if (state.kind !== "offline") throw new Error("unreachable");
     expect(state.lastSeenAt.toISOString()).toBe("2026-08-23T11:55:00.000Z");
+    expect(state.lastSeenToday).toBe(true);
+    expect(state.hasPlays).toBe(true);
+  });
+
+  test("offline judges 'today' at the Amsterdam midnight, not the UTC one", () => {
+    const lastSeen = (agoMs: number) => {
+      const state = at(flag(true, agoMs), null);
+      if (state.kind !== "offline") throw new Error("unreachable");
+      return state;
+    };
+    // NOW is 14:00 in Amsterdam. 13 h earlier is 01:00 the same day there, and
+    // already the previous day in UTC.
+    expect(lastSeen(13 * 60 * MIN).lastSeenToday).toBe(true);
+    // 15 h earlier is 23:00 the previous day there.
+    expect(lastSeen(15 * 60 * MIN).lastSeenToday).toBe(false);
+  });
+
+  test("offline with nothing logged today says it has no plays", () => {
+    const state = at(flag(true, 5 * MIN), null);
+    if (state.kind !== "offline") throw new Error("unreachable");
+    expect(state.hasPlays).toBe(false);
   });
 
   test("flag content 0 is off air, carrying the last play of the day", () => {

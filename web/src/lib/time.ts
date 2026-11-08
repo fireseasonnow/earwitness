@@ -42,6 +42,16 @@ export function todayAms(): string {
   return dateFmt.format(new Date()); // en-CA formats as YYYY-MM-DD
 }
 
+/** Amsterdam calendar date of an instant, YYYY-MM-DD. */
+export function amsDateOf(instant: Date): string {
+  return dateFmt.format(instant);
+}
+
+/** Compact Amsterdam date for a stored UTC ISO timestamp, e.g. "Sat 22 Aug". */
+export function amsDay(playedAtIso: string): string {
+  return headerFmt.format(new Date(playedAtIso));
+}
+
 /** HH:MM in Amsterdam for a stored UTC ISO timestamp. */
 export function amsTime(playedAtIso: string): string {
   return timeFmt.format(new Date(playedAtIso));

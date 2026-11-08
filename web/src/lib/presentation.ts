@@ -1,5 +1,5 @@
 import type { DisplayState } from "./health";
-import { amsTime } from "./time";
+import { amsDay, amsTime } from "./time";
 
 /**
  * State -> the hero's four slots.
@@ -141,15 +141,20 @@ export function hero(state: DisplayState): Hero {
         showLog: true,
       };
 
-    case "offline":
+    case "offline": {
+      const iso = state.lastSeenAt.toISOString();
+      const since = state.lastSeenToday ? amsTime(iso) : `${amsDay(iso)}, ${amsTime(iso)}`;
       return {
         kicker: "Tracker offline",
         artist: null,
-        headline: `Nothing heard since ${amsTime(state.lastSeenAt.toISOString())}`,
-        detail: "The tracker stopped reporting. Plays captured before it went quiet are below.",
+        headline: `Nothing heard since ${since}`,
+        detail: state.hasPlays
+          ? "The tracker stopped reporting. Plays captured before it went quiet are below."
+          : "The tracker stopped reporting, and nothing has been logged today.",
         tone: "attention",
         showLog: true,
       };
+    }
 
     case "starting_up":
       return {

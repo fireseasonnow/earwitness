@@ -1,4 +1,5 @@
 import type { LiveFlag, PlayView } from "./state";
+import { amsDateOf } from "./time";
 
 /**
  * Derived display states. The tracker records facts; this decides what they
@@ -11,7 +12,7 @@ import type { LiveFlag, PlayView } from "./state";
  */
 export type DisplayState =
   | { kind: "starting_up" }
-  | { kind: "offline"; lastSeenAt: Date }
+  | { kind: "offline"; lastSeenAt: Date; lastSeenToday: boolean; hasPlays: boolean }
   | { kind: "off_air"; lastPlayAt: string | null }
   | { kind: "stalled"; silenceMinutes: number }
   | { kind: "listening" }
@@ -95,7 +96,14 @@ export function deriveState(
 
   if (now.getTime() - flag.updatedAt.getTime() > STALE_MS) {
     // More fundamental than the last thing the dead tracker managed to say.
-    return { kind: "offline", lastSeenAt: flag.updatedAt };
+    return {
+      kind: "offline",
+      lastSeenAt: flag.updatedAt,
+      // An outage can outlast the Amsterdam day, and a bare time then names the
+      // wrong morning: "since 07:57 AM" once meant eight days earlier.
+      lastSeenToday: amsDateOf(flag.updatedAt) === amsDateOf(now),
+      hasPlays: newestPlay !== null,
+    };
   }
   if (!flag.streamLive) return { kind: "off_air", lastPlayAt: newestPlay?.detectedAt ?? null };
   // After the off-air check: a named cause is more use than "nothing new".
