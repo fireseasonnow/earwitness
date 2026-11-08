@@ -38,14 +38,22 @@ const hero = heroFor(state);
         </span>
       </h1>
     </div>
-    <span class="text-note tracking-meta text-muted md:text-row">
-      {todayDisplay()} · Amsterdam time · <a
-        href="https://www.youtube.com/@claude/live"
-        target="_blank"
-        rel="noopener"
-        class="text-terra-text underline hover:text-terra-hover">Listen live</a
-      >
-    </span>
+    <div class="flex flex-col text-note tracking-meta text-muted md:items-end md:text-row">
+      <span>{todayDisplay()} · Amsterdam time</span>
+      <span>
+        <a
+          href="https://www.youtube.com/@claude/live"
+          target="_blank"
+          rel="noopener"
+          class="text-terra-text underline hover:text-terra-hover">Listen live</a
+        > · <a
+          href="https://github.com/fireseasonnow/earwitness"
+          target="_blank"
+          rel="noopener"
+          class="text-terra-text underline hover:text-terra-hover">GitHub</a
+        >
+      </span>
+    </div>
   </header>
 
   {/* Good news and bad news land in the same place, so the reader learns where
