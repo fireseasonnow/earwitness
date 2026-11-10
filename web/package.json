@@ -9,6 +9,7 @@
     "build": "bunx --bun astro build",
     "check": "bunx --bun astro check",
     "icons": "bun run scripts/render-icons.ts",
+    "arrivals": "bun run scripts/arrivals.ts",
     "start": "bun ./dist/server/entry.mjs"
   },
   "dependencies": {

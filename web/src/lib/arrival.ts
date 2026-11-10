@@ -240,22 +240,58 @@ function browserFamily(ua: string): Browser {
 }
 
 /**
+ * Every browser names a rendering engine; a script names itself.
+ *
+ * Blink and WebKit both say `AppleWebKit` and `like Gecko`, Firefox says
+ * `Gecko/`, and the last Trident and Presto builds still say theirs. `axios/1.7`,
+ * `okhttp/4.12`, `HomeAssistant/2024.10 aiohttp/3.10`, a bare `Mozilla/5.0`, or
+ * `Mozilla/5.0 (compatible; Whatever/1.0)` say none of them, and none of them
+ * contains a {@link BOT_MARKERS} substring either.
+ */
+function namesAnEngine(ua: string): boolean {
+  return /applewebkit|gecko|trident|presto/.test(ua);
+}
+
+/**
  * The three buckets a user-agent string is reduced to, after which the string
  * itself is dropped and never leaves this module.
  *
- * A missing user agent is filed as a bot: no mainstream browser omits it, and
- * scripted clients routinely do. A hardened browser that sends none is
- * misfiled, and that is the cheaper of the two errors.
+ * Bot is the union of four tests, each catching what the others miss:
+ *
+ *   no user agent       no mainstream browser omits it; scripted clients do. A
+ *                       hardened browser that sends none is misfiled, and that
+ *                       is the cheaper of the two errors.
+ *   a marker            the crawlers that announce themselves.
+ *   no engine           a client that does not claim to render HTML at all.
+ *   `other`, and no     a client that claims an engine but no browser family
+ *   fetch metadata      the families recognise, AND sends no `Sec-Fetch-Dest`.
+ *
+ * The last two exist because of one client, first seen 2026-10-23: `other`,
+ * desktop, no referrer, polling every 45 s for ten hours at a stretch. A
+ * browser's meta refresh quotes the page as its referrer and is dropped as a
+ * refresh; a poller's request does not, so every poll was filed as a stranger
+ * arriving — 942 lines by 2026-11-10, 42% of everything not flagged.
+ *
+ * `fetchMetadata` is a boolean, not the header, so nothing the client chose
+ * reaches the bucket. It is consulted ONLY for `other`: the genuine readers in
+ * that family are in-app webviews (a WebKit UA with no `Safari` token), and they
+ * send it, as every engine has since Safari 16.4 (2023). Chrome, Firefox and
+ * Safari UAs are never second-guessed on it — an old Safari omitting the header
+ * is a reader, and a family that says what it is has been classified already.
  */
-export function classifyClient(userAgent: string | null): Client {
+export function classifyClient(userAgent: string | null, fetchMetadata: boolean): Client {
   if (userAgent === null || userAgent.trim() === "") {
     return { device: "desktop", ua: "other", bot: true };
   }
   const ua = userAgent.toLowerCase();
+  const family = browserFamily(ua);
   return {
     device: deviceKind(ua),
-    ua: browserFamily(ua),
-    bot: BOT_MARKERS.some((marker) => ua.includes(marker)),
+    ua: family,
+    bot:
+      BOT_MARKERS.some((marker) => ua.includes(marker)) ||
+      !namesAnEngine(ua) ||
+      (family === "other" && !fetchMetadata),
   };
 }
 
@@ -294,7 +330,7 @@ export function describeArrival(url: URL, headers: Headers): Arrival | null {
     via: viaTag(url.searchParams.get("via")),
     country: countryCode(headers.get("cf-ipcountry")),
     tz: timeZone(headers.get("cf-timezone")),
-    ...classifyClient(headers.get("user-agent")),
+    ...classifyClient(headers.get("user-agent"), headers.has("sec-fetch-dest")),
   };
 }
 

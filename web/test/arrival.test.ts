@@ -18,8 +18,8 @@ import { ORIGIN } from "../src/lib/metadata";
  *                       count of tab-hours
  *   the ANONYMITY rule  no raw user-agent, no IP, no city, ever, whatever a
  *                       client sends
- *   the LINE format     one event and seven space-free fields, because the
- *                       README's `awk` queries are the read side of this module
+ *   the LINE format     one event and seven space-free fields, because
+ *                       `scripts/arrivals.ts` is the read side of this module
  *
  * The second and third have no other guard. A field that starts carrying a
  * client's own text, or a space, breaks a promise the README makes in prose,
@@ -64,6 +64,13 @@ const UA = {
   curl: "curl/8.6.0",
   headless:
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/126.0.0.0 Safari/537.36",
+  instagramWebview:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 337.0.3.23.54",
+  axios: "axios/1.7.7",
+  okhttp: "okhttp/4.12.0",
+  homeAssistant: "HomeAssistant/2024.10.4 aiohttp/3.10.10 Python/3.12",
+  bareMozilla: "Mozilla/5.0",
+  compatibleNoEngine: "Mozilla/5.0 (compatible; NowPlaying/1.0)",
 };
 
 /** A request as it reaches the origin through the tunnel. */
@@ -210,24 +217,46 @@ describe("classifyClient — three buckets, then the string is dropped", () => {
   ];
 
   for (const [name, ua, expected] of cases) {
-    test(name, () => expect(classifyClient(ua)).toEqual(expected));
+    test(name, () => expect(classifyClient(ua, true)).toEqual(expected));
   }
 
   test("no user agent is filed as a bot", () => {
     // No mainstream browser omits it; scripted clients routinely do.
-    expect(classifyClient(null).bot).toBe(true);
-    expect(classifyClient("").bot).toBe(true);
+    expect(classifyClient(null, true).bot).toBe(true);
+    expect(classifyClient("", true).bot).toBe(true);
   });
 
   test("a modern iPad reports as desktop, and that is known", () => {
     // iPadOS 13+ sends a Mac user agent by default. Documented in `arrival.ts`:
     // it costs the tablet share, not the split the breakpoints are chosen on.
-    expect(classifyClient(UA.ipadModern).device).toBe("desktop");
+    expect(classifyClient(UA.ipadModern, true).device).toBe("desktop");
+  });
+
+  test("a client that names no rendering engine is a bot, metadata or not", () => {
+    for (const ua of [UA.axios, UA.okhttp, UA.homeAssistant, UA.bareMozilla, UA.compatibleNoEngine]) {
+      expect(classifyClient(ua, true).bot).toBe(true);
+      expect(classifyClient(ua, false).bot).toBe(true);
+    }
+  });
+
+  test("an in-app webview is a reader when it sends fetch metadata, as every engine does", () => {
+    expect(classifyClient(UA.instagramWebview, true)).toEqual({ device: "mobile", ua: "other", bot: false });
+  });
+
+  test("the same webview shape without fetch metadata is a script wearing it", () => {
+    expect(classifyClient(UA.instagramWebview, false).bot).toBe(true);
+  });
+
+  test("a named family is never second-guessed on fetch metadata", () => {
+    // An old Safari predates the header; its UA already said what it is.
+    for (const ua of [UA.iphoneSafari, UA.macSafari, UA.windowsChrome, UA.linuxFirefox]) {
+      expect(classifyClient(ua, false).bot).toBe(false);
+    }
   });
 
   test("Chromium is never filed as Safari, though its UA says Safari", () => {
     for (const ua of [UA.androidChrome, UA.windowsChrome, UA.windowsEdge, UA.samsungPhone]) {
-      expect(classifyClient(ua).ua).toBe("chrome");
+      expect(classifyClient(ua, true).ua).toBe("chrome");
     }
   });
 });
@@ -249,6 +278,25 @@ describe("describeArrival — the record of one visit", () => {
       ua: "chrome",
       bot: false,
     });
+  });
+
+  test("a poller is flagged: no referrer, no family, no fetch metadata", () => {
+    // What 942 lines from one client looked like before this rule: a request
+    // every 45 s, none quoting the page, so none dropped as a refresh.
+    const { url, headers } = request("/", {
+      "user-agent": UA.instagramWebview,
+      "cf-ipcountry": "GH",
+      "cf-timezone": "Africa/Accra",
+    });
+    expect(describeArrival(url, headers)!.bot).toBe(true);
+  });
+
+  test("fetch metadata is read off the request", () => {
+    const { url, headers } = request("/", {
+      "user-agent": UA.instagramWebview,
+      "sec-fetch-dest": "document",
+    });
+    expect(describeArrival(url, headers)!.bot).toBe(false);
   });
 
   test("a tagged link with no referrer keeps its attribution", () => {
