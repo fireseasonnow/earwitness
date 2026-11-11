@@ -18,6 +18,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { RETENTION_MS } from "@earwitness/shared";
 import { CONFIG } from "./config";
 import { rotationDistance } from "./fingerprint";
 import { log } from "./log";
@@ -275,6 +276,15 @@ export function pruneBefore(dir: string, cutoff: Date): number {
   const dropped = state.plays.length - kept.length;
   if (dropped > 0) writeState(dir, { ...state, plays: kept });
   return dropped;
+}
+
+/**
+ * Keep a rolling `RETENTION_MS` of plays. There is no day boundary to roll over
+ * at: the page cuts the window at each reader's midnight. Not logged, since a
+ * play ages out every few minutes.
+ */
+export function pruneExpired(dir: string, now: Date = new Date()): number {
+  return pruneBefore(dir, new Date(now.getTime() - RETENTION_MS));
 }
 
 /**

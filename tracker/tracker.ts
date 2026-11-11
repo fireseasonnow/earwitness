@@ -9,14 +9,14 @@
  * line is the only record: a stitch failure MUST carry its raw OCR fragments,
  * because nothing else can reconstruct them afterwards.
  */
-import { RETENTION_MS, parseUnit } from "@earwitness/shared";
+import { parseUnit } from "@earwitness/shared";
 import { CONFIG } from "./src/config";
 import { captureBurst, captureTickFrame, ocrFrame } from "./src/capture";
 import { knownSpelling } from "./src/catalogue";
 import {
   StateUnreadableError,
   ensureStateDir,
-  pruneBefore,
+  pruneExpired,
   readState,
   recordPlay,
   writeConfirmedFlag,
@@ -85,15 +85,6 @@ async function getUrl(): Promise<string> {
 }
 
 /**
- * Keep a rolling `RETENTION_MS` of plays. There is no day boundary to roll over
- * at: the page cuts the window at each reader's midnight. Not logged, since a
- * play ages out every few minutes.
- */
-function pruneExpired(): void {
-  pruneBefore(CONFIG.stateDir, new Date(Date.now() - RETENTION_MS));
-}
-
-/**
  * Dedup budget for a unit we do not trust. Confident stitches jitter by a
  * couple of chars; a pathological-OCR song stitches a different garbage variant
  * every burst, so the budget has to scale with length or every burst records a
@@ -135,7 +126,8 @@ async function captureTickWithRetry(): Promise<string> {
 }
 
 async function tick(): Promise<void> {
-  pruneExpired();
+  // First, and every tick: `test/loop.test.ts` holds it there.
+  pruneExpired(CONFIG.stateDir);
   /*
    * Stamped BEFORE any capture: a burst tick can legitimately run for over a
    * minute, and stamping on completion would make a healthy tracker look stale

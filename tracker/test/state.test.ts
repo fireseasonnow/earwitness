@@ -10,6 +10,7 @@ import {
   lastPlayCredit,
   playsPath,
   pruneBefore,
+  pruneExpired,
   readLiveFlag,
   readState,
   recordPlay,
@@ -223,6 +224,32 @@ describe("pruneBefore", () => {
     seed("first play of the long day", dayStart);
     pruneBefore(dir, new Date(lastMinute - RETENTION_MS));
     expect(plays()).toHaveLength(1);
+  });
+});
+
+describe("pruneExpired", () => {
+  const NOW = new Date("2026-08-22T10:00:00.000Z");
+  const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+  const HOUR = 3600e3;
+
+  test("drops plays older than the window, measured back from now", () => {
+    writeState(dir, {
+      ...emptyState(),
+      plays: [
+        { detectedAt: ago(RETENTION_MS + 1), credit: "expired" },
+        { detectedAt: ago(RETENTION_MS), credit: "oldest kept" },
+        { detectedAt: ago(1 * HOUR), credit: "recent" },
+      ],
+    });
+    expect(pruneExpired(dir, NOW)).toBe(1);
+    expect(credits()).toEqual(["oldest kept", "recent"]);
+  });
+
+  test("keeps the whole previous Amsterdam day the old rollover dropped", () => {
+    // 24 h ago is last night everywhere, and still today for a reader far enough
+    // west — the plays a midnight rollover used to delete.
+    writeState(dir, { ...emptyState(), plays: [{ detectedAt: ago(24 * HOUR), credit: "last night" }] });
+    expect(pruneExpired(dir, NOW)).toBe(0);
   });
 });
 
