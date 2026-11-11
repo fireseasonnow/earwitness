@@ -2,14 +2,17 @@
 import Hero from "./Hero.astro";
 import Mark from "./Mark.astro";
 import PlayLog from "./PlayLog.astro";
-import { confirmedAt, liveFlag, playsToday } from "../lib/state";
+import { confirmedAt, liveFlag, recentPlays } from "../lib/state";
 import { deriveState } from "../lib/health";
+import { localizeScript } from "../lib/localize";
 import { hero as heroFor, toneMark } from "../lib/presentation";
-import { todayDisplay } from "../lib/time";
+import { AMSTERDAM, clock } from "../lib/time";
 
-const plays = playsToday();
-const state = deriveState(liveFlag(), plays[plays.length - 1] ?? null, confirmedAt());
+const now = new Date();
+const plays = recentPlays(now);
+const state = deriveState(liveFlag(), plays[plays.length - 1] ?? null, confirmedAt(), now);
 const hero = heroFor(state);
+const dayStart = AMSTERDAM.dayStart(now).toISOString();
 ---
 
 <div
@@ -39,7 +42,12 @@ const hero = heroFor(state);
       </h1>
     </div>
     <div class="flex flex-col text-note tracking-meta text-muted md:items-end md:text-row">
-      <span>{todayDisplay()} · Amsterdam time</span>
+      {/* `localize.ts` swaps in the reader's date and their browser's zone. */}
+      <span
+        ><time data-today datetime={AMSTERDAM.date(now)}>{AMSTERDAM.day(now)}</time> · <span
+          data-zone>Amsterdam time</span
+        ></span
+      >
       <span>
         <a
           href="https://www.youtube.com/@claude/live"
@@ -58,13 +66,17 @@ const hero = heroFor(state);
 
   {/* Good news and bad news land in the same place, so the reader learns where
       to look once. The log still renders beneath it either way. */}
-  <Hero hero={hero} />
+  <Hero hero={hero} now={now} />
 
   <div class="dots mt-[24px] mb-[20px] md:mt-[28px] md:mb-[22px] lg:mt-[30px] lg:mb-[24px]"></div>
 
   {
     hero.showLog && (
-      <PlayLog plays={plays} nowPlaying={state.kind === "ok" && state.nowPlaying} />
+      <PlayLog
+        plays={plays}
+        nowPlaying={state.kind === "ok" && state.nowPlaying}
+        dayStart={dayStart}
+      />
     )
   }
 
@@ -95,7 +107,10 @@ const hero = heroFor(state);
       class="text-terra-text underline hover:text-terra-hover">Claude FM</a
     >, Anthropic's 24/7 stream, and logs what it hears: the stream publishes no tracklist, and
     a single frame never shows a whole credit, so the tracker reads a burst and reconstructs
-    the line. The log holds one Amsterdam day and starts again empty at midnight. Visits are
+    the line. <span
+      data-local="Times follow the time zone your browser reports, and the log holds your day, starting again empty at your midnight."
+      >The log holds one Amsterdam day and starts again empty at midnight.</span
+    > Visits are
     counted in buckets only — no IP address, no raw user-agent string, no city — because a
     bucket describes a population where the raw values describe a person. Track names
     belong to their respective artists. Source on <a
@@ -103,4 +118,8 @@ const hero = heroFor(state);
       class="text-terra-text underline hover:text-terra-hover">GitHub</a
     >, MIT licensed.
   </footer>
+
+  {/* Inline and last: it runs before first paint, so the 30 s refresh never
+      flashes Amsterdam times. */}
+  <script is:inline set:html={localizeScript(clock)} />
 </div>

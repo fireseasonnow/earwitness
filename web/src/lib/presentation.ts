@@ -1,5 +1,4 @@
 import type { DisplayState } from "./health";
-import { amsDay, amsTime } from "./time";
 
 /**
  * State -> the hero's four slots.
@@ -12,6 +11,23 @@ import { amsDay, amsTime } from "./time";
  * the priority order, and a copy edit must not touch it.
  */
 
+/**
+ * A moment inside a line of copy, left as an instant: the server prints it in
+ * Amsterdam and the browser in the reader's zone (`clock().stamp`).
+ */
+export interface Stamp {
+  /** UTC ISO-8601. */
+  at: string;
+}
+
+/** A line of copy: words, with any moments in it left as stamps. */
+export type Text = readonly (string | Stamp)[];
+
+/** A line as one string, with each stamp rendered by `render`. */
+export function plain(text: Text, render: (at: string) => string): string {
+  return text.map((part) => (typeof part === "string" ? part : render(part.at))).join("");
+}
+
 /** Three tones, each resolving to two tiers — see `toneMark` / `toneText`. */
 export type Tone = "live" | "dormant" | "attention";
 
@@ -19,8 +35,8 @@ export interface Hero {
   kicker: string;
   /** Omitted entirely rather than blank: no empty line, no stray separator. */
   artist: string | null;
-  headline: string;
-  detail: string;
+  headline: Text;
+  detail: Text;
   tone: Tone;
   /** False only for `starting_up`, which has nothing captured to show. */
   showLog: boolean;
@@ -80,7 +96,7 @@ function ago(seconds: number): string {
 export function hero(state: DisplayState): Hero {
   switch (state.kind) {
     case "ok": {
-      const at = amsTime(state.play.detectedAt);
+      const at: Stamp = { at: state.play.detectedAt };
       const read = `ticker read ${ago(state.tickerReadSecondsAgo)}`;
       // "Now playing" assumes the newest play is what is on the air. Outside
       // the 6-minute window that is a claim the data does not support, so the
@@ -89,16 +105,16 @@ export function hero(state: DisplayState): Hero {
         ? {
             kicker: "On air · now playing",
             artist: state.play.artist.length > 0 ? state.play.artist : null,
-            headline: state.play.title,
-            detail: `Since ${at} · ${read}`,
+            headline: [state.play.title],
+            detail: ["Since ", at, ` · ${read}`],
             tone: "live",
             showLog: true,
           }
         : {
             kicker: "On air · last logged",
             artist: state.play.artist.length > 0 ? state.play.artist : null,
-            headline: state.play.title,
-            detail: `Logged at ${at} · ${read}`,
+            headline: [state.play.title],
+            detail: ["Logged at ", at, ` · ${read}`],
             tone: "live",
             showLog: true,
           };
@@ -108,8 +124,8 @@ export function hero(state: DisplayState): Hero {
       return {
         kicker: "Listening",
         artist: null,
-        headline: "No song logged yet",
-        detail: "The stream is up — waiting for the first song change since midnight.",
+        headline: ["No song logged yet"],
+        detail: ["The stream is up — waiting for the first song change."],
         tone: "live",
         showLog: false,
       };
@@ -120,10 +136,11 @@ export function hero(state: DisplayState): Hero {
       return {
         kicker: "Nothing coming through",
         artist: null,
-        headline: `Nothing new for ${plural(state.silenceMinutes, "minute")}`,
-        detail:
+        headline: [`Nothing new for ${plural(state.silenceMinutes, "minute")}`],
+        detail: [
           "The stream is on air and the tracker is running, but no song change has " +
-          "been logged. Everything captured before that is below.",
+            "been logged. Everything captured before that is below.",
+        ],
         tone: "attention",
         showLog: true,
       };
@@ -132,25 +149,25 @@ export function hero(state: DisplayState): Hero {
       return {
         kicker: "Off air",
         artist: null,
-        headline: "Nothing on the air",
+        headline: ["Nothing on the air"],
         detail:
           state.lastPlayAt === null
-            ? "Nothing logged today. The log stays up until midnight."
-            : `Last play ${amsTime(state.lastPlayAt)}. Today's log stays up until midnight.`,
+            ? ["Nothing logged today. The log stays up until midnight."]
+            : ["Last play ", { at: state.lastPlayAt }, ". Today's log stays up until midnight."],
         tone: "dormant",
         showLog: true,
       };
 
     case "offline": {
-      const iso = state.lastSeenAt.toISOString();
-      const since = state.lastSeenToday ? amsTime(iso) : `${amsDay(iso)}, ${amsTime(iso)}`;
       return {
         kicker: "Tracker offline",
         artist: null,
-        headline: `Nothing heard since ${since}`,
-        detail: state.hasPlays
-          ? "The tracker stopped reporting. Plays captured before it went quiet are below."
-          : "The tracker stopped reporting, and nothing has been logged today.",
+        headline: ["Nothing heard since ", { at: state.lastSeenAt.toISOString() }],
+        detail: [
+          state.hasPlays
+            ? "The tracker stopped reporting. Plays captured before it went quiet are below."
+            : "The tracker stopped reporting, and nothing has been logged today.",
+        ],
         tone: "attention",
         showLog: true,
       };
@@ -160,8 +177,8 @@ export function hero(state: DisplayState): Hero {
       return {
         kicker: "Starting up",
         artist: null,
-        headline: "Tuning in",
-        detail: "Resolving the stream and taking a first reading.",
+        headline: ["Tuning in"],
+        detail: ["Resolving the stream and taking a first reading."],
         tone: "dormant",
         showLog: false,
       };

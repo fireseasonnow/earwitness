@@ -1,6 +1,7 @@
 ---
 import type { Hero } from "../lib/presentation";
 import { toneText } from "../lib/presentation";
+import Text from "./Text.astro";
 
 /**
  * The health surface and the now-playing surface, in one place.
@@ -11,8 +12,9 @@ import { toneText } from "../lib/presentation";
  */
 interface Props {
   hero: Hero;
+  now: Date;
 }
-const { hero } = Astro.props;
+const { hero, now } = Astro.props;
 ---
 
 <div class="flex min-h-[168px] flex-col justify-end md:min-h-[186px] lg:min-h-[196px]">
@@ -40,10 +42,10 @@ const { hero } = Astro.props;
   <h2
     class="text-hero font-medium leading-[1.2] tracking-title text-pretty md:text-hero-md lg:text-hero-lg"
   >
-    {hero.headline}
+    <Text text={hero.headline} now={now} />
   </h2>
 
   <p class="mt-[14px] text-row leading-[1.55] text-muted md:mt-[15px] lg:mt-[16px]">
-    {hero.detail}
+    <Text text={hero.detail} now={now} />
   </p>
 </div>

@@ -1,7 +1,7 @@
 /**
  * Persistent state: three plain files in one directory.
  *
- *   plays.json      the day's plays, and nothing else
+ *   plays.json      the last 25 hours of plays, and nothing else
  *   live.flag       one byte; its mtime is the tracker's heartbeat
  *   confirmed.flag  no content; its mtime is the last time the marquee was
  *                   READ as still showing the newest logged play
@@ -37,7 +37,7 @@ export interface Play {
   detectedAt: string;
   /**
    * Canonical stitched reading of the ticker for this song — the first spelling
-   * seen today. Dedup compares against this, and every reader parses it.
+   * seen in the retention window. Dedup compares against this, and every reader parses it.
    */
   credit: string;
 }
@@ -54,7 +54,7 @@ export interface State {
  *
  * A version MISMATCH is deliberately not this error: that file is perfectly
  * readable and merely old, and exiting on it would crash-loop a forward deploy
- * until the next Amsterdam midnight. It is renamed aside instead.
+ * until the old plays aged out of the window. It is renamed aside instead.
  */
 export class StateUnreadableError extends Error {}
 
@@ -179,15 +179,15 @@ export function readState(dir: string = CONFIG.stateDir): State {
 }
 
 export interface ResolvedCredit {
-  /** The canonical spelling of this song for today: the first one seen. */
+  /** The canonical spelling of this song in the window: the first one seen. */
   credit: string;
-  /** false → today's plays already contain this song. */
+  /** false → the retained plays already contain this song. */
   isNew: boolean;
 }
 
 /**
- * Resolve a stitched unit to the canonical credit of a song already in today's
- * plays, or to itself when it is new. Within edit distance ≤ maxEdits of a
+ * Resolve a stitched unit to the canonical credit of a song already in the
+ * retained plays, or to itself when it is new. Within edit distance ≤ maxEdits of a
  * stored credit it is the same song (OCR jitter), and so is any ROTATION of one
  * within that budget.
  *
@@ -262,22 +262,19 @@ export function recordPlay(dir: string, unit: string, maxEdits: number): Recorde
 }
 
 /**
- * Retain only the current Amsterdam day.
- *
- * One filter over one array. Nothing outside the play array is referenced by a
- * play, so there is no second pass, no ordering between passes to get wrong, and
- * nothing left orphaned by a drop — the property the old track filter existed to
- * maintain.
+ * Drop every play detected before `cutoff` and return how many went. Runs every
+ * tick, so it writes only when something was dropped.
  *
  * ISO-8601 UTC strings of identical format compare lexicographically in
- * chronological order, so the boundary test needs no date parsing. Only entries
- * strictly before the boundary are dropped, so a play appended later in the same
- * tick is never in range.
+ * chronological order, so the boundary test needs no date parsing.
  */
-export function pruneToDay(dir: string, dayStartUtc: Date): void {
+export function pruneBefore(dir: string, cutoff: Date): number {
   const state = readState(dir);
-  const boundary = dayStartUtc.toISOString();
-  writeState(dir, { ...state, plays: state.plays.filter((p) => p.detectedAt >= boundary) });
+  const boundary = cutoff.toISOString();
+  const kept = state.plays.filter((p) => p.detectedAt >= boundary);
+  const dropped = state.plays.length - kept.length;
+  if (dropped > 0) writeState(dir, { ...state, plays: kept });
+  return dropped;
 }
 
 /**

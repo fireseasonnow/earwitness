@@ -1,151 +1,155 @@
-import { afterAll, describe, expect, setSystemTime, test } from "bun:test";
-import { amsTime, todayAms, todayDisplay, todayRangeUtc } from "../src/lib/time";
-import { amsMidnightUtc } from "../../tracker/src/time";
+import { describe, expect, test } from "bun:test";
+import { AMSTERDAM, clock } from "../src/lib/time";
 
 /**
- * The Amsterdam day boundary is implemented TWICE — here and in
- * `tracker/src/time.ts` — deliberately: two packages, no shared module. The
- * last block is what guards the duplication: same instant from both, across a
- * full year.
- *
- * `amsMidnightUtc` is private here, so the solver is driven through
- * `todayRangeUtc` with the clock moved rather than exported to be testable.
+ * One clock, two places it runs: the server, named "Europe/Amsterdam", and the
+ * reader's browser, in whatever zone it reports. The zones below stand in for
+ * readers; the last block proves the function still runs once it is cut loose
+ * from this module, which is how the browser gets it.
  */
 
-/** Amsterdam noon on `date` — safely inside the day whatever the offset. */
-function atNoon(date: string): void {
-  setSystemTime(new Date(`${date}T10:00:00.000Z`));
-}
+const LA = clock("America/Los_Angeles");
+const AUCKLAND = clock("Pacific/Auckland");
 
-afterAll(() => setSystemTime());
+const at = (iso: string) => new Date(iso);
 
-describe("todayRangeUtc", () => {
-  test("summer time: the day runs 22:00 UTC to 22:00 UTC", () => {
-    atNoon("2026-08-22");
-    expect(todayRangeUtc()).toEqual({
-      startIso: "2026-08-21T22:00:00.000Z",
-      endIso: "2026-08-22T22:00:00.000Z",
-    });
+describe("dayStart — where a day begins, per zone", () => {
+  test("Amsterdam summer and winter", () => {
+    expect(AMSTERDAM.dayStart(at("2026-08-22T10:00:00Z")).toISOString()).toBe("2026-08-21T22:00:00.000Z");
+    expect(AMSTERDAM.dayStart(at("2026-01-15T10:00:00Z")).toISOString()).toBe("2026-01-14T23:00:00.000Z");
   });
 
-  test("winter time: the day runs 23:00 UTC to 23:00 UTC", () => {
-    atNoon("2026-01-15");
-    expect(todayRangeUtc()).toEqual({
-      startIso: "2026-01-14T23:00:00.000Z",
-      endIso: "2026-01-15T23:00:00.000Z",
-    });
+  test("Amsterdam spring forward: the next day starts 23 hours later, not 24", () => {
+    const start = AMSTERDAM.dayStart(at("2026-03-29T10:00:00Z"));
+    const next = AMSTERDAM.dayStart(at("2026-03-30T10:00:00Z"));
+    expect(start.toISOString()).toBe("2026-03-28T23:00:00.000Z");
+    expect((next.getTime() - start.getTime()) / 3600e3).toBe(23);
   });
 
-  test("spring forward: a 23-hour day, not 24", () => {
-    // 2026-03-29, 02:00 → 03:00 local. A fixed 24-hour offset would put the end
-    // of the range an hour into the next day and render tomorrow's first plays.
-    atNoon("2026-03-29");
-    const { startIso, endIso } = todayRangeUtc();
-    expect(startIso).toBe("2026-03-28T23:00:00.000Z");
-    expect(endIso).toBe("2026-03-29T22:00:00.000Z");
-    expect((Date.parse(endIso) - Date.parse(startIso)) / 3600e3).toBe(23);
+  test("Amsterdam fall back: 25 hours", () => {
+    const start = AMSTERDAM.dayStart(at("2026-10-25T10:00:00Z"));
+    const next = AMSTERDAM.dayStart(at("2026-10-26T10:00:00Z"));
+    expect(start.toISOString()).toBe("2026-10-24T22:00:00.000Z");
+    expect((next.getTime() - start.getTime()) / 3600e3).toBe(25);
   });
 
-  test("fall back: a 25-hour day, not 24", () => {
-    // 2026-10-25, 03:00 → 02:00 local. A fixed offset would cut the day an hour
-    // early and silently drop the last hour of plays from the page.
-    atNoon("2026-10-25");
-    const { startIso, endIso } = todayRangeUtc();
-    expect(startIso).toBe("2026-10-24T22:00:00.000Z");
-    expect(endIso).toBe("2026-10-25T23:00:00.000Z");
-    expect((Date.parse(endIso) - Date.parse(startIso)) / 3600e3).toBe(25);
+  test("a reader behind Amsterdam: Los Angeles", () => {
+    // 15:00 UTC on 11 Nov is 07:00 in LA, whose day began at 08:00 UTC.
+    expect(LA.dayStart(at("2026-11-11T15:00:00Z")).toISOString()).toBe("2026-11-11T08:00:00.000Z");
   });
 
-  test("the range is half-open, so a boundary instant belongs to one day only", () => {
-    // `playsToday` filters with `>= start` and `< end`. A play stamped exactly
-    // at midnight must appear once, on the day it starts — not twice, not never.
-    atNoon("2026-08-22");
-    const today = todayRangeUtc();
-    atNoon("2026-08-23");
-    const tomorrow = todayRangeUtc();
-    expect(today.endIso).toBe(tomorrow.startIso);
+  test("a reader twelve hours ahead of Amsterdam: Auckland", () => {
+    // 15:00 UTC on 11 Nov is 04:00 on the 12th there, which began at 11:00 UTC.
+    expect(AUCKLAND.dayStart(at("2026-11-11T15:00:00Z")).toISOString()).toBe("2026-11-11T11:00:00.000Z");
+    // 10:59 UTC on the 12th is 23:59 there — the oldest a current day gets.
+    expect(AUCKLAND.dayStart(at("2026-11-12T10:59:00Z")).toISOString()).toBe("2026-11-11T11:00:00.000Z");
   });
 
-  test("just before midnight is still yesterday", () => {
-    // 21:59:59 UTC on 21 Aug is 23:59:59 Amsterdam — the last second of the 21st.
-    setSystemTime(new Date("2026-08-21T21:59:59.000Z"));
-    expect(todayAms()).toBe("2026-08-21");
-    setSystemTime(new Date("2026-08-21T22:00:00.000Z"));
-    expect(todayAms()).toBe("2026-08-22");
+  test("where clocks skip midnight itself, the day begins at the end of the gap", () => {
+    // Havana springs 00:00 → 01:00 on 8 Mar 2026, the Azores on 29 Mar.
+    expect(clock("America/Havana").dayStart(at("2026-03-08T15:00:00Z")).toISOString()).toBe(
+      "2026-03-08T05:00:00.000Z",
+    );
+    expect(clock("Atlantic/Azores").dayStart(at("2026-03-29T15:00:00Z")).toISOString()).toBe(
+      "2026-03-29T01:00:00.000Z",
+    );
+  });
+
+  test("the instant a day begins belongs to that day", () => {
+    const start = AMSTERDAM.dayStart(at("2026-08-22T10:00:00Z"));
+    expect(AMSTERDAM.dayStart(start).getTime()).toBe(start.getTime());
+    expect(AMSTERDAM.date(new Date(start.getTime() - 1))).toBe("2026-08-21");
+  });
+
+  test("the runtime's own zone and the solver agree", () => {
+    // The browser takes the Date-constructor branch; the server takes the
+    // solver. Here both run in one zone, and must land on one instant.
+    const own = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const named = clock(own);
+    const local = clock();
+    const cursor = new Date("2026-01-01T12:00:00Z");
+    for (let i = 0; i < 365; i++) {
+      expect(local.dayStart(cursor).getTime(), cursor.toISOString()).toBe(named.dayStart(cursor).getTime());
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
   });
 });
 
-describe("display formatting", () => {
-  test("stored UTC renders as Amsterdam wall time, offset and all", () => {
-    expect(amsTime("2026-08-23T09:41:12.000Z")).toBe("11:41 AM"); // CEST, +2
-    expect(amsTime("2026-01-15T09:41:12.000Z")).toBe("10:41 AM"); // CET,  +1
+describe("time — the log's column", () => {
+  test("stored UTC renders as wall time in the zone, offset and all", () => {
+    expect(AMSTERDAM.time("2026-08-23T09:41:12.000Z")).toBe("11:41 AM"); // CEST, +2
+    expect(AMSTERDAM.time("2026-01-15T09:41:12.000Z")).toBe("10:41 AM"); // CET,  +1
+    expect(LA.time("2026-08-23T09:41:12.000Z")).toBe("02:41 AM"); // PDT, −7
   });
 
   test("the two noon/midnight traps read correctly", () => {
-    // 12-hour clocks get these wrong more often than any other value: midnight
-    // is 12 AM (not 00 or 12 PM) and midday is 12 PM (not 00 PM).
-    expect(amsTime("2026-08-21T22:00:00.000Z")).toBe("12:00 AM"); // 00:00 Ams
-    expect(amsTime("2026-08-22T10:00:00.000Z")).toBe("12:00 PM"); // 12:00 Ams
-    expect(amsTime("2026-08-22T11:00:00.000Z")).toBe("01:00 PM"); // 13:00 Ams
+    // Midnight is 12 AM (not 00 or 12 PM) and midday is 12 PM (not 00 PM).
+    expect(AMSTERDAM.time("2026-08-21T22:00:00.000Z")).toBe("12:00 AM");
+    expect(AMSTERDAM.time("2026-08-22T10:00:00.000Z")).toBe("12:00 PM");
+    expect(AMSTERDAM.time("2026-08-22T11:00:00.000Z")).toBe("01:00 PM");
   });
 
   test("every reading is exactly eight characters", () => {
-    // The log's time column is a fixed width sized off this. A single-digit
-    // hour under `hour: "numeric"` would render seven and break the alignment,
-    // so the padding is a layout contract, not a preference.
-    const samples = [
-      "2026-08-23T05:41:12.000Z", // 07:41 AM — single-digit hour
-      "2026-08-23T09:41:12.000Z", // 11:41 AM
-      "2026-08-21T22:00:00.000Z", // 12:00 AM
-      "2026-08-23T20:30:00.000Z", // 10:30 PM
-    ];
-    for (const iso of samples) {
-      expect(amsTime(iso), iso).toMatch(/^\d{2}:\d{2} [AP]M$/);
-      expect(amsTime(iso)).toHaveLength(8);
+    // The log's time column is a fixed width sized off this, so the padding is
+    // a layout contract, not a preference.
+    for (const iso of [
+      "2026-08-23T05:41:12.000Z",
+      "2026-08-23T09:41:12.000Z",
+      "2026-08-21T22:00:00.000Z",
+      "2026-08-23T20:30:00.000Z",
+    ]) {
+      expect(AMSTERDAM.time(iso), iso).toMatch(/^\d{2}:\d{2} [AP]M$/);
     }
-  });
-
-  test("the header date is compact and carries no year", () => {
-    atNoon("2026-08-22");
-    const shown = todayDisplay();
-    expect(shown).toBe("Sat 22 Aug");
-    expect(shown).not.toContain("2026");
   });
 });
 
-/**
- * The guard the duplication actually needs.
- *
- * Testing each copy against hand-written expectations proves each is
- * self-consistent; it does not prove they agree. They must: the tracker prunes
- * everything before ITS midnight, and the page renders everything inside THIS
- * one. A drift of an hour between them means the page hides plays the tracker
- * is still keeping, twice a year, for one hour — and it would look like a
- * tracker bug from every angle except this test.
- */
-describe("both packages agree on where the day starts", () => {
-  test("every day of 2026, including both DST transitions", () => {
-    const disagreements: string[] = [];
-    const cursor = new Date("2026-01-01T12:00:00.000Z");
+describe("stamp — a moment in a sentence", () => {
+  const NOW = at("2026-08-23T12:00:00Z"); // 14:00 Amsterdam
 
-    for (let i = 0; i < 365; i++) {
-      const date = cursor.toISOString().slice(0, 10);
-      setSystemTime(new Date(`${date}T10:00:00.000Z`));
-      const web = todayRangeUtc().startIso;
-      const tracker = amsMidnightUtc(date).toISOString();
-      if (web !== tracker) disagreements.push(`${date}: web ${web} vs tracker ${tracker}`);
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
-    }
-
-    expect(disagreements).toEqual([]);
+  test("on the same day it is the time alone", () => {
+    expect(AMSTERDAM.stamp("2026-08-23T09:41:12Z", NOW)).toBe("11:41 AM");
   });
 
-  test("the comparison is real — it would catch a fixed-offset regression", () => {
-    // A guard that cannot fail is decoration. A 24-hour offset from the start of
-    // one day does NOT land on the start of the next across a DST transition,
-    // which is exactly the bug the solver in both copies exists to avoid.
-    const springForward = amsMidnightUtc("2026-03-29").getTime();
-    const naiveNextDay = springForward + 24 * 3600e3;
-    expect(amsMidnightUtc("2026-03-30").getTime()).not.toBe(naiveNextDay);
+  test("on an earlier day it names the day", () => {
+    expect(AMSTERDAM.stamp("2026-08-22T21:30:00Z", NOW)).toBe("Sat 22 Aug, 11:30 PM");
+  });
+
+  test("'today' is the zone's, not UTC's", () => {
+    // 13 h before NOW is 01:00 the same Amsterdam day, and already the
+    // previous day in UTC; 15 h before is 23:00 the previous Amsterdam day.
+    expect(AMSTERDAM.stamp(new Date(NOW.getTime() - 13 * 3600e3), NOW)).toBe("01:00 AM");
+    expect(AMSTERDAM.stamp(new Date(NOW.getTime() - 15 * 3600e3), NOW)).toBe("Sat 22 Aug, 11:00 PM");
+  });
+
+  test("one instant can be today in one zone and yesterday in another", () => {
+    // 09:00 UTC is 11:00 in Amsterdam on the 23rd, and 21:00 the night before
+    // in Auckland, where NOW is already 00:00 on the 24th.
+    expect(AMSTERDAM.stamp("2026-08-23T09:00:00Z", NOW)).toBe("11:00 AM");
+    expect(AUCKLAND.stamp("2026-08-23T09:00:00Z", NOW)).toBe("Sun 23 Aug, 09:00 PM");
+  });
+});
+
+describe("day and zone — the header", () => {
+  test("the date is compact and carries no year", () => {
+    expect(AMSTERDAM.day(at("2026-08-22T10:00:00Z"))).toBe("Sat 22 Aug");
+  });
+
+  test("the zone is named as a reader knows it, and follows daylight saving", () => {
+    expect(LA.zone(at("2026-01-15T12:00:00Z"))).toBe("Pacific Standard Time");
+    expect(LA.zone(at("2026-08-15T12:00:00Z"))).toBe("Pacific Daylight Time");
+  });
+});
+
+describe("the clock runs cut loose from this module", () => {
+  test("its source alone rebuilds a working clock", () => {
+    // How the browser gets it: `Function.prototype.toString`, pasted into an
+    // inline script. Bun inlines module-scope constants, so a borrowed one only
+    // shows in `page.test.ts`, which runs the script Vite emits.
+    const detached = new Function(`return (${clock.toString()})`)() as typeof clock;
+    const la = detached("America/Los_Angeles");
+    expect(la.time("2026-08-23T09:41:12.000Z")).toBe("02:41 AM");
+    expect(la.dayStart(at("2026-11-11T15:00:00Z")).toISOString()).toBe("2026-11-11T08:00:00.000Z");
+    expect(la.stamp("2026-11-10T15:00:00Z", at("2026-11-11T15:00:00Z"))).toBe("Tue 10 Nov, 07:00 AM");
+    expect(detached().time("2026-08-23T09:41:12.000Z")).toMatch(/^\d{2}:\d{2} [AP]M$/);
   });
 });

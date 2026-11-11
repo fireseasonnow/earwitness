@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { parseUnit, resolveStateDir } from "@earwitness/shared";
-import { todayRangeUtc } from "./time";
+import { RETENTION_MS, parseUnit, resolveStateDir } from "@earwitness/shared";
 
 /**
  * Read-only view of the tracker's state directory.
@@ -42,15 +41,17 @@ interface RawPlay {
 }
 
 /**
- * Plays of the current Amsterdam day, oldest first.
+ * Every play still in the retention window, oldest first. Each reader's day is
+ * cut from it later: by `PlayLog` for Amsterdam, by `localize.ts` for the
+ * reader. The newest play is the newest in the window, so a song crossing
+ * midnight stays in the hero.
  *
  * The tracker appends chronologically and nothing is sorted here. This order is
  * the contract: `DayView` takes the LAST element as the newest play to derive
  * the health state. `PlayLog` reverses a copy for display.
  *
- * The tracker prunes previous days at rollover, so the range filter is a safety
- * net rather than the retention policy — but it stays: between a missed rollover
- * and a page load, stale entries must still never render.
+ * The tracker prunes every tick, so the filter is a safety net: a stopped
+ * tracker prunes nothing, and its stale entries must still never render.
  *
  * Artist and title are derived per row rather than read: they are not stored,
  * because they are a pure function of the credit stored beside them.
@@ -62,7 +63,7 @@ interface RawPlay {
  * next request retries; the tracker takes the opposite position on the same file
  * because it would be the one overwriting it.
  */
-export function playsToday(): PlayView[] {
+export function recentPlays(now: Date = new Date()): PlayView[] {
   if (!existsSync(playsFile)) return []; // tracker has not written yet
   let state: { version?: unknown; plays?: RawPlay[] };
   try {
@@ -76,10 +77,11 @@ export function playsToday(): PlayView[] {
   if (state.version !== STATE_VERSION) return [];
   if (!Array.isArray(state.plays)) return [];
 
-  const { startIso, endIso } = todayRangeUtc();
+  const startIso = new Date(now.getTime() - RETENTION_MS).toISOString();
+  const nowIso = now.toISOString();
   const out: PlayView[] = [];
   for (const p of state.plays) {
-    if (p.detectedAt < startIso || p.detectedAt >= endIso) continue;
+    if (p.detectedAt < startIso || p.detectedAt > nowIso) continue;
     const { artist, title } = parseUnit(p.credit);
     out.push({ detectedAt: p.detectedAt, artist, title });
   }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONFIG } from "../src/config";
@@ -9,7 +9,7 @@ import {
   emptyState,
   lastPlayCredit,
   playsPath,
-  pruneToDay,
+  pruneBefore,
   readLiveFlag,
   readState,
   recordPlay,
@@ -17,7 +17,7 @@ import {
   writeLiveFlag,
   writeState,
 } from "../src/state";
-import { amsMidnightUtc } from "../src/time";
+import { RETENTION_MS } from "@earwitness/shared";
 
 const ORIONS = "Orions Belte — Manual Shear";
 const FIELDS = "Fields of Ethera — 02 - Boundless Horizons";
@@ -164,59 +164,65 @@ describe("canonical credit", () => {
   });
 });
 
-describe("pruneToDay", () => {
+describe("pruneBefore", () => {
   function seed(credit: string, detectedAt: string): void {
     const state = readState(dir);
     state.plays.push({ detectedAt, credit });
     writeState(dir, state);
   }
 
-  test("keeps today and drops earlier days", () => {
-    seed("yesterday", "2026-08-21T20:00:00.000Z"); // 22:00 Amsterdam, 2026-08-21
-    seed("today", "2026-08-21T22:30:00.000Z"); // 00:30 Amsterdam, 2026-08-22
-    pruneToDay(dir, amsMidnightUtc("2026-08-22"));
-    expect(credits()).toEqual(["today"]);
+  const CUTOFF = new Date("2026-08-22T10:00:00.000Z");
+
+  test("keeps the window and drops what came before it", () => {
+    seed("expired", "2026-08-22T09:59:59.999Z");
+    seed("kept", "2026-08-22T10:30:00.000Z");
+    expect(pruneBefore(dir, CUTOFF)).toBe(1);
+    expect(credits()).toEqual(["kept"]);
   });
 
-  test("a song played on both days keeps only today's play", () => {
+  test("a song played on both sides of the cutoff keeps only the later play", () => {
     seed("repeat", "2026-08-21T20:00:00.000Z");
-    seed("repeat", "2026-08-22T09:00:00.000Z");
-    pruneToDay(dir, amsMidnightUtc("2026-08-22"));
+    seed("repeat", "2026-08-22T11:00:00.000Z");
+    pruneBefore(dir, CUTOFF);
     expect(plays()).toHaveLength(1);
   });
 
   test("nothing outside the play array is left orphaned", () => {
     seed("gone", "2026-08-21T20:00:00.000Z");
-    pruneToDay(dir, amsMidnightUtc("2026-08-22"));
+    pruneBefore(dir, CUTOFF);
     expect(readState(dir)).toEqual(emptyState());
   });
 
-  test("the boundary instant itself is retained", () => {
-    seed("boundary", amsMidnightUtc("2026-08-22").toISOString());
-    pruneToDay(dir, amsMidnightUtc("2026-08-22"));
+  test("the cutoff instant itself is retained", () => {
+    seed("boundary", CUTOFF.toISOString());
+    expect(pruneBefore(dir, CUTOFF)).toBe(0);
     expect(plays()).toHaveLength(1);
   });
 
-  test("on a 23-hour day the boundary is the true Amsterdam midnight, not -24 h", () => {
-    // Spring-forward day: 23:30 UTC on 2026-03-28 is 00:30 Amsterdam on the
-    // 29th and must survive. A fixed 24-hour offset would put the boundary at
-    // 2026-03-29T00:00Z and delete it.
-    seed("early hours of the 29th", "2026-03-28T23:30:00.000Z");
-    pruneToDay(dir, amsMidnightUtc("2026-03-29"));
-    expect(plays()).toHaveLength(1);
+  test("a prune that drops nothing writes nothing", () => {
+    // It runs on every tick. Rewriting an unchanged file twice a minute would
+    // be all cost and no change.
+    seed("kept", "2026-08-22T11:00:00.000Z");
+    const before = statSync(playsPath(dir)).mtimeMs;
+    Bun.sleepSync(5);
+    expect(pruneBefore(dir, CUTOFF)).toBe(0);
+    expect(statSync(playsPath(dir)).mtimeMs).toBe(before);
   });
 
-  test("on a 25-hour day the doubled hour still belongs to that day", () => {
-    // Fall-back day: 2026-10-25 runs 22:00Z(24th) → 23:00Z(25th). 00:30Z on the
-    // 25th is 02:30 Amsterdam, inside the day.
-    seed("doubled hour", "2026-10-25T00:30:00.000Z");
-    pruneToDay(dir, amsMidnightUtc("2026-10-25"));
-    expect(plays()).toHaveLength(1);
+  test("prune on a fresh directory creates no file", () => {
+    expect(pruneBefore(dir, CUTOFF)).toBe(0);
+    expect(existsSync(playsPath(dir))).toBe(false);
   });
 
-  test("prune on a fresh directory writes valid empty state", () => {
-    pruneToDay(dir, amsMidnightUtc("2026-08-22"));
-    expect(readState(dir)).toEqual(emptyState());
+  test("the window holds a whole fall-back day for the zone furthest along it", () => {
+    // Anchored to a real 25-hour day rather than to the arithmetic: Auckland
+    // falls back on 2026-04-05, so that local day runs 2026-04-04T11:00Z →
+    // 2026-04-05T12:00Z. A minute before it ends, its first play must survive.
+    const dayStart = "2026-04-04T11:00:00.000Z";
+    const lastMinute = Date.parse("2026-04-05T11:59:00.000Z");
+    seed("first play of the long day", dayStart);
+    pruneBefore(dir, new Date(lastMinute - RETENTION_MS));
+    expect(plays()).toHaveLength(1);
   });
 });
 
@@ -361,7 +367,7 @@ describe("unreadable state", () => {
   test("an unreadable file is never overwritten by a prune", () => {
     const garbage = "nope";
     writeFileSync(playsPath(dir), garbage);
-    expect(() => pruneToDay(dir, amsMidnightUtc("2026-08-22"))).toThrow(StateUnreadableError);
+    expect(() => pruneBefore(dir, new Date("2026-08-22T10:00:00.000Z"))).toThrow(StateUnreadableError);
     expect(readFileSync(playsPath(dir), "utf8")).toBe(garbage);
   });
 

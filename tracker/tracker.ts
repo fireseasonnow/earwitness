@@ -9,14 +9,14 @@
  * line is the only record: a stitch failure MUST carry its raw OCR fragments,
  * because nothing else can reconstruct them afterwards.
  */
-import { parseUnit } from "@earwitness/shared";
+import { RETENTION_MS, parseUnit } from "@earwitness/shared";
 import { CONFIG } from "./src/config";
 import { captureBurst, captureTickFrame, ocrFrame } from "./src/capture";
 import { knownSpelling } from "./src/catalogue";
 import {
   StateUnreadableError,
   ensureStateDir,
-  pruneToDay,
+  pruneBefore,
   readState,
   recordPlay,
   writeConfirmedFlag,
@@ -27,7 +27,6 @@ import { log } from "./src/log";
 import { normalize } from "./src/normalize";
 import { StreamUrl } from "./src/resolve";
 import { stitch } from "./src/stitch";
-import { amsMidnightUtc, todayAms } from "./src/time";
 
 /**
  * One play, as a log line. Artist and title are derived here from the credit
@@ -68,9 +67,6 @@ let burstCooldownTicks = 0;
 // The frames of the burst that most recently failed to stitch — the reference
 // the cooldown below is judged against. Empty whenever no cooldown is owed.
 let failedBurstFragments: string[] = [];
-// null until the first tick, so a tracker that starts having last run yesterday
-// prunes immediately instead of waiting for a live midnight boundary (D3).
-let lastAmsDate: string | null = null;
 // Optimistic: no resolution has failed yet. A first tick reporting "off air"
 // before yt-dlp has even been asked would be a lie in the other direction.
 let streamLive = true;
@@ -89,24 +85,12 @@ async function getUrl(): Promise<string> {
 }
 
 /**
- * Retain only today, and re-establish the current song across the boundary.
- *
- * Clearing `currentUnit` sends the next tick down the burst path (the startup
- * path), so the song crossing midnight becomes the new day's first play instead
- * of staying invisible until the next genuine track change. The
- * backoff counters go with it — a cooldown carried over from last night must not
- * delay that first burst.
+ * Keep a rolling `RETENTION_MS` of plays. There is no day boundary to roll over
+ * at: the page cuts the window at each reader's midnight. Not logged, since a
+ * play ages out every few minutes.
  */
-function rolloverIfNeeded(): void {
-  const today = todayAms();
-  if (today === lastAmsDate) return;
-  pruneToDay(CONFIG.stateDir, amsMidnightUtc(today));
-  currentUnit = null;
-  failedStitchStreak = 0;
-  burstCooldownTicks = 0;
-  failedBurstFragments = [];
-  if (lastAmsDate !== null) log(`rollover to ${today} — previous days pruned`);
-  lastAmsDate = today;
+function pruneExpired(): void {
+  pruneBefore(CONFIG.stateDir, new Date(Date.now() - RETENTION_MS));
 }
 
 /**
@@ -151,7 +135,7 @@ async function captureTickWithRetry(): Promise<string> {
 }
 
 async function tick(): Promise<void> {
-  rolloverIfNeeded();
+  pruneExpired();
   /*
    * Stamped BEFORE any capture: a burst tick can legitimately run for over a
    * minute, and stamping on completion would make a healthy tracker look stale
@@ -343,8 +327,8 @@ async function tick(): Promise<void> {
         ` fragments=${JSON.stringify(fragments)} consensus=${JSON.stringify(res.unit)}`,
     );
   }
-  // The credit, not `res.unit`: a burst that resolved to a song already playing
-  // today is stored under that song's spelling, and that is the one on the page.
+  // The credit, not `res.unit`: a burst that resolved to a song already in the
+  // window is stored under that song's spelling, and that is the one on the page.
   if (!parseUnit(credit).ok) {
     log(`anomaly parse_failure: "${credit}"`);
   }

@@ -20,21 +20,25 @@ Two supervised processes on one host, no AI calls.
 - `tracker/` — Bun + TypeScript: the loop above, and what it does when the loop
   is not sure. A stitch it cannot vouch for goes to the journal with its
   fragments, not onto the row. It also stamps a heartbeat every tick, records
-  that the marquee still reads as the song already logged, and prunes at the
-  Amsterdam day boundary.
+  that the marquee still reads as the song already logged, and prunes plays
+  older than 25 hours.
 - `web/` — Astro + Tailwind, server-rendered on every request: `/` is the only
-  page. Times in Europe/Amsterdam, 12-hour with AM/PM (stored in UTC). It also
+  page. Rendered in Europe/Amsterdam, then re-rendered in the reader's browser
+  time zone by one inline script, 12-hour with AM/PM (stored in UTC). It also
   logs one anonymous line per arrival to the journal, which is all the traffic
   telemetry there is.
-- `shared/` — the two things both processes must agree on and nothing else: how
-  a credit splits into artist and title, and where the state directory is. Pure
+- `shared/` — the three things both processes must agree on and nothing else:
+  how a credit splits into artist and title, where the state directory is, and
+  how long a play is kept. Pure
   functions and constants, no I/O.
 
-**Today only.** At Europe/Amsterdam midnight the tracker drops the previous day's
-plays, and there is nothing else to drop — a play references nothing outside its
-own array. Then it starts collecting again. There is no archive and no dated
-route — by design, not omission. The day boundary is Amsterdam regardless of
-where the server or the viewer is.
+**Today only — the reader's today.** The page shows each reader the plays since
+their own midnight, in their browser's time zone. To cover every zone the
+tracker keeps a rolling 25 hours, the longest a current day can be anywhere, and
+drops anything older on every tick; a play references nothing outside its own
+array, so there is nothing else to drop. There is no archive and no dated route
+— by design, not omission. Without JavaScript the page falls back to the
+Amsterdam day.
 
 ## Running it locally
 

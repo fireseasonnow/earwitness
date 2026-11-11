@@ -1,5 +1,4 @@
 import type { LiveFlag, PlayView } from "./state";
-import { amsDateOf } from "./time";
 
 /**
  * Derived display states. The tracker records facts; this decides what they
@@ -12,7 +11,7 @@ import { amsDateOf } from "./time";
  */
 export type DisplayState =
   | { kind: "starting_up" }
-  | { kind: "offline"; lastSeenAt: Date; lastSeenToday: boolean; hasPlays: boolean }
+  | { kind: "offline"; lastSeenAt: Date; hasPlays: boolean }
   | { kind: "off_air"; lastPlayAt: string | null }
   | { kind: "stalled"; silenceMinutes: number }
   | { kind: "listening" }
@@ -98,10 +97,8 @@ export function deriveState(
     // More fundamental than the last thing the dead tracker managed to say.
     return {
       kind: "offline",
+      // Whether this was today depends on the reader's zone: the renderer decides.
       lastSeenAt: flag.updatedAt,
-      // An outage can outlast the Amsterdam day, and a bare time then names the
-      // wrong morning: "since 07:57 AM" once meant eight days earlier.
-      lastSeenToday: amsDateOf(flag.updatedAt) === amsDateOf(now),
       hasPlays: newestPlay !== null,
     };
   }
@@ -128,7 +125,6 @@ export function deriveState(
       tickerReadSecondsAgo: Math.max(0, Math.floor((now.getTime() - flag.updatedAt.getTime()) / 1000)),
     };
   }
-  // Covers both a fresh start and the minutes just after midnight, when the
-  // prune has cleared the day and the crossing song is not yet logged.
+  // A fresh start, or a tracker back after more than a day away.
   return { kind: "listening" };
 }

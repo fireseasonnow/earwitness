@@ -1,14 +1,16 @@
 ---
 import type { PlayView } from "../lib/state";
-import { amsTime } from "../lib/time";
+import { AMSTERDAM } from "../lib/time";
 
 /**
  * Today's plays, in full.
  *
- * The log is never truncated. With no archive, no dated route and no
- * client-side JavaScript, an "N earlier plays" label leads nowhere, so the day
- * renders complete and the count stays in the header. ~400 rows is a trivial
- * page.
+ * The log is never truncated. With no archive and no dated route, an "N
+ * earlier plays" label leads nowhere, so the day renders complete and the count
+ * stays in the header. ~400 rows is a trivial page.
+ *
+ * Every play in the retention window is rendered, those outside the Amsterdam
+ * day `hidden`; `localize.ts` re-cuts the list at the reader's midnight.
  *
  * There is no confidence marker on a row. The tracker's own certainty about a
  * stitch is operator telemetry — a viewer cannot act on it or even tell what it
@@ -27,9 +29,12 @@ interface Props {
   /** Marks the newest row. Derived once with the hero's claim so the two
       cannot disagree. */
   nowPlaying: boolean;
+  /** UTC ISO start of the Amsterdam day: rows before it render hidden. */
+  dayStart: string;
 }
-const { plays, nowPlaying } = Astro.props;
+const { plays, nowPlaying, dayStart } = Astro.props;
 const rows = [...plays].reverse();
+const shown = plays.filter((p) => p.detectedAt >= dayStart).length;
 ---
 
 <div>
@@ -37,7 +42,7 @@ const rows = [...plays].reverse();
     <span class="text-label font-medium uppercase tracking-label text-muted md:text-note">
       Played today
     </span>
-    <span class="text-row tabular-nums text-muted">{plays.length}</span>
+    <span class="text-row tabular-nums text-muted" data-count>{shown}</span>
   </div>
 
   <ol reversed class="flex flex-col">
@@ -46,13 +51,15 @@ const rows = [...plays].reverse();
         const live = nowPlaying && i === 0;
         return (
           <li
+            data-at={p.detectedAt}
+            hidden={p.detectedAt < dayStart}
             class="flex items-baseline gap-[14px] py-[5px] text-row leading-[1.45] md:gap-[18px] md:py-[6px] md:text-lede lg:gap-[20px]"
           >
             {/* Eight monospace characters ("09:41 AM") at 12px, 13px at md.
                 Sized off the type scale, not guessed — a narrower column wraps
                 the AM/PM onto a second line and the rows stop aligning. */}
             <span class="w-[62px] shrink-0 tabular-nums text-muted md:w-[68px]">
-              {amsTime(p.detectedAt)}
+              <time datetime={p.detectedAt} data-time>{AMSTERDAM.time(p.detectedAt)}</time>
             </span>
             <span class:list={[live ? "font-medium text-ink" : "text-row-ink"]}>
               {

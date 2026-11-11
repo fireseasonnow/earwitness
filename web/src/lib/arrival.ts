@@ -154,13 +154,9 @@ export function countryCode(raw: string | null): string {
  * `cf-timezone`, from the **Add visitor location headers** managed transform —
  * free on every plan, and off until switched on.
  *
- * The geography field this project has a use for, and the reason city is not
- * collected. The page is Amsterdam-locked twice over: the times it prints, and
- * the midnight at which the whole day is dropped. So the question with an action
- * behind it is what share of readers meet that rollover in the middle of their
- * own afternoon and find a nearly empty log. Roughly 35 zones survive the cache
- * sampling above; a thousand-bucket city tail would not, IP-to-city is wrong in
- * a mobile-carrier-shaped way, and a city beside a device and a referrer on one
+ * Collected in place of city. Roughly 35 zones survive the cache sampling
+ * above; a thousand-bucket city tail would not, IP-to-city is wrong in a
+ * mobile-carrier-shaped way, and a city beside a device and a referrer on one
  * timestamped line stops describing a population and starts describing a person.
  */
 export function timeZone(raw: string | null): string {

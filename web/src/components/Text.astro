@@ -1,0 +1,17 @@
+---
+import type { Text } from "../lib/presentation";
+import { AMSTERDAM } from "../lib/time";
+
+/** A line of hero copy; each stamp is a `<time>` that `localize.ts` re-prints. */
+interface Props {
+  text: Text;
+  now: Date;
+}
+const { text, now } = Astro.props;
+---
+
+{
+  text.map((part) =>
+    typeof part === "string" ? part : <time datetime={part.at} data-stamp>{AMSTERDAM.stamp(part.at, now)}</time>,
+  )
+}

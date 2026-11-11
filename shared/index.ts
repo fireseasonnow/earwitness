@@ -4,8 +4,8 @@
  * The tracker writes `plays.json`; the web app reads it. They deploy from one
  * checkout but run as two supervised processes, so anything they must agree
  * about is a contract nothing enforces unless it has exactly one definition.
- * Two such agreements exist: where the state directory is, and how a credit
- * splits into artist and title. Both live here, and
+ * Three such agreements exist: where the state directory is, how a credit
+ * splits into artist and title, and how long a play is kept. All live here, and
  * `shared/test/no-reimplementation.test.ts` greps the tree for a second
  * implementation of the parse rule rather than trusting the convention.
  *
@@ -16,3 +16,4 @@
 export { parseUnit } from "./src/parse";
 export type { ParsedUnit } from "./src/parse";
 export { DEFAULT_STATE_DIR, resolveStateDir } from "./src/state-dir";
+export { RETENTION_MS } from "./src/retention";

@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DisplayState } from "../src/lib/health";
-import { hero, toneMark, toneText, type Tone } from "../src/lib/presentation";
+import { hero, plain, toneMark, toneText, type Text, type Tone } from "../src/lib/presentation";
+import { AMSTERDAM } from "../src/lib/time";
 import type { PlayView } from "../src/lib/state";
 
 /**
@@ -16,12 +17,16 @@ const PLAY: PlayView = {
   title: "kokosing",
 };
 
-const OFFLINE_TODAY = { lastSeenToday: true, hasPlays: true };
+/** A line as the server renders it, on the day of PLAY. */
+const NOW = new Date("2026-08-23T12:00:00.000Z");
+const read = (text: Text): string => plain(text, (at) => AMSTERDAM.stamp(at, NOW));
+
+const OFFLINE_TODAY = { hasPlays: true };
 
 const ALL_STATES: DisplayState[] = [
   { kind: "starting_up" },
   { kind: "offline", ...OFFLINE_TODAY, lastSeenAt: new Date("2026-08-23T09:41:12.000Z") },
-  { kind: "offline", lastSeenAt: new Date("2026-10-31T06:57:39.000Z"), lastSeenToday: false, hasPlays: false },
+  { kind: "offline", lastSeenAt: new Date("2026-10-31T06:57:39.000Z"), hasPlays: false },
   { kind: "off_air", lastPlayAt: PLAY.detectedAt },
   { kind: "off_air", lastPlayAt: null },
   { kind: "stalled", silenceMinutes: 22 },
@@ -37,8 +42,8 @@ describe("hero — every state fills every slot", () => {
     for (const state of ALL_STATES) {
       const h = hero(state);
       expect(h.kicker.length, `kicker for ${state.kind}`).toBeGreaterThan(0);
-      expect(h.headline.length, `headline for ${state.kind}`).toBeGreaterThan(0);
-      expect(h.detail.length, `detail for ${state.kind}`).toBeGreaterThan(0);
+      expect(read(h.headline).length, `headline for ${state.kind}`).toBeGreaterThan(0);
+      expect(read(h.detail).length, `detail for ${state.kind}`).toBeGreaterThan(0);
     }
   });
 
@@ -62,9 +67,9 @@ describe("hero — the on-air states", () => {
   test("inside the now window it claims the song is playing", () => {
     const h = hero({ kind: "ok", play: PLAY, nowPlaying: true, tickerReadSecondsAgo: 12 });
     expect(h.kicker).toBe("On air · now playing");
-    expect(h.headline).toBe("kokosing");
+    expect(read(h.headline)).toBe("kokosing");
     expect(h.artist).toBe("Ben Seretan");
-    expect(h.detail).toBe("Since 11:41 AM · ticker read just now");
+    expect(read(h.detail)).toBe("Since 11:41 AM · ticker read just now");
     expect(h.tone).toBe("live");
   });
 
@@ -72,8 +77,8 @@ describe("hero — the on-air states", () => {
     const now = hero({ kind: "ok", play: PLAY, nowPlaying: true, tickerReadSecondsAgo: 12 });
     const past = hero({ kind: "ok", play: PLAY, nowPlaying: false, tickerReadSecondsAgo: 12 });
     expect(past.kicker).toBe("On air · last logged");
-    expect(past.detail).toBe("Logged at 11:41 AM · ticker read just now");
-    expect(past.headline).toBe(now.headline);
+    expect(read(past.detail)).toBe("Logged at 11:41 AM · ticker read just now");
+    expect(past.headline).toEqual(now.headline);
     expect(past.tone).toBe(now.tone);
     expect(past.showLog).toBe(now.showLog);
   });
@@ -91,7 +96,7 @@ describe("hero — the on-air states", () => {
     const noArtist: PlayView = { ...PLAY, artist: "" };
     const h = hero({ kind: "ok", play: noArtist, nowPlaying: true, tickerReadSecondsAgo: 3 });
     expect(h.artist).toBeNull();
-    expect(h.headline).toBe("kokosing");
+    expect(read(h.headline)).toBe("kokosing");
   });
 
   test("artist is null in every state that has no play to name", () => {
@@ -101,15 +106,15 @@ describe("hero — the on-air states", () => {
 });
 
 describe("hero — the trouble states", () => {
-  test("offline names the Amsterdam time it was last heard from", () => {
+  test("offline names the time it was last heard from", () => {
     const h = hero({
       kind: "offline",
       ...OFFLINE_TODAY,
       lastSeenAt: new Date("2026-08-23T09:41:12.000Z"),
     });
     expect(h.kicker).toBe("Tracker offline");
-    expect(h.headline).toBe("Nothing heard since 11:41 AM");
-    expect(h.detail).toContain("are below");
+    expect(read(h.headline)).toBe("Nothing heard since 11:41 AM");
+    expect(read(h.detail)).toContain("are below");
     expect(h.tone).toBe("attention");
     expect(h.showLog).toBe(true);
   });
@@ -118,27 +123,22 @@ describe("hero — the trouble states", () => {
     const h = hero({
       kind: "offline",
       lastSeenAt: new Date("2026-10-31T06:57:39.000Z"),
-      lastSeenToday: false,
       hasPlays: false,
     });
-    expect(h.headline).toBe("Nothing heard since Sat 31 Oct, 07:57 AM");
-    expect(h.detail).toBe("The tracker stopped reporting, and nothing has been logged today.");
+    expect(read(h.headline)).toBe("Nothing heard since Sat 31 Oct, 07:57 AM");
+    expect(read(h.detail)).toBe("The tracker stopped reporting, and nothing has been logged today.");
   });
 
-  test("winter time shifts the same instant by an hour", () => {
-    // Stored UTC, displayed Amsterdam — the offset is not a constant.
-    const h = hero({
-      kind: "offline",
-      ...OFFLINE_TODAY,
-      lastSeenAt: new Date("2026-01-15T09:41:12.000Z"),
-    });
-    expect(h.headline).toBe("Nothing heard since 10:41 AM");
+  test("a moment stays an instant until it is rendered", () => {
+    // Whose time and whose "today" belong to the renderer: the reader's zone.
+    const h = hero({ kind: "offline", ...OFFLINE_TODAY, lastSeenAt: new Date(PLAY.detectedAt) });
+    expect(h.headline).toEqual(["Nothing heard since ", { at: PLAY.detectedAt }]);
   });
 
   test("stalled reports the silence, never a failure count", () => {
     const h = hero({ kind: "stalled", silenceMinutes: 22 });
     expect(h.kicker).toBe("Nothing coming through");
-    expect(h.headline).toBe("Nothing new for 22 minutes");
+    expect(read(h.headline)).toBe("Nothing new for 22 minutes");
     expect(h.tone).toBe("attention");
     expect(h.showLog).toBe(true);
   });
@@ -146,18 +146,18 @@ describe("hero — the trouble states", () => {
   test("off air keeps the day's log up and says so", () => {
     const withPlay = hero({ kind: "off_air", lastPlayAt: PLAY.detectedAt });
     expect(withPlay.kicker).toBe("Off air");
-    expect(withPlay.headline).toBe("Nothing on the air");
-    expect(withPlay.detail).toContain("11:41 AM");
+    expect(read(withPlay.headline)).toBe("Nothing on the air");
+    expect(read(withPlay.detail)).toContain("11:41 AM");
     expect(withPlay.tone).toBe("dormant");
 
     const empty = hero({ kind: "off_air", lastPlayAt: null });
-    expect(empty.detail).toContain("Nothing logged today");
-    expect(empty.detail).not.toContain("Last play");
+    expect(read(empty.detail)).toContain("Nothing logged today");
+    expect(read(empty.detail)).not.toContain("Last play");
   });
 
   test("starting up and listening are the two quiet states", () => {
-    expect(hero({ kind: "starting_up" }).headline).toBe("Tuning in");
-    expect(hero({ kind: "listening" }).headline).toBe("No song logged yet");
+    expect(read(hero({ kind: "starting_up" }).headline)).toBe("Tuning in");
+    expect(read(hero({ kind: "listening" }).headline)).toBe("No song logged yet");
     expect(hero({ kind: "starting_up" }).tone).toBe("dormant");
     expect(hero({ kind: "listening" }).tone).toBe("live");
   });
@@ -165,13 +165,13 @@ describe("hero — the trouble states", () => {
 
 describe("hero — plurals", () => {
   const detailFor = (seconds: number): string =>
-    hero({ kind: "ok", play: PLAY, nowPlaying: true, tickerReadSecondsAgo: seconds }).detail;
+    read(hero({ kind: "ok", play: PLAY, nowPlaying: true, tickerReadSecondsAgo: seconds }).detail);
 
   test("one is singular, everything else is not", () => {
     expect(detailFor(60)).toContain("1 minute ago");
     expect(detailFor(125)).toContain("2 minutes ago");
-    expect(hero({ kind: "stalled", silenceMinutes: 1 }).headline).toBe("Nothing new for 1 minute");
-    expect(hero({ kind: "stalled", silenceMinutes: 16 }).headline).toBe("Nothing new for 16 minutes");
+    expect(read(hero({ kind: "stalled", silenceMinutes: 1 }).headline)).toBe("Nothing new for 1 minute");
+    expect(read(hero({ kind: "stalled", silenceMinutes: 16 }).headline)).toBe("Nothing new for 16 minutes");
   });
 
   test("a reading under a minute is not quoted in seconds", () => {

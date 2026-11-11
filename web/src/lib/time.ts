@@ -1,97 +1,85 @@
-// Plays are stored in UTC; everything the user sees is Europe/Amsterdam,
-// including the day boundary. Intl handles DST (23/25-hour days) for free.
-// Mirrored in `tracker/src/time.ts` — see the note there.
-const TZ = "Europe/Amsterdam";
+/**
+ * Every moment the page prints, rendered in one time zone: Amsterdam on the
+ * server, the reader's own zone in the browser (`localize.ts`).
+ *
+ * Self-contained by contract: the page serialises it into an inline script with
+ * `Function.prototype.toString`, so it may reference nothing outside its own
+ * body. Omit `timeZone` for the runtime's own zone.
+ */
+export function clock(timeZone?: string) {
+  const fmt = (locale: string, options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale, { ...options, timeZone });
 
-const dateFmt = new Intl.DateTimeFormat("en-CA", {
-  timeZone: TZ,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-// 12-hour with AM/PM. `hour: "2-digit"` is load-bearing rather than cosmetic:
-// with "numeric" a single-digit hour renders "9:41 AM" at seven characters
-// instead of eight, and the log's fixed-width time column stops lining up.
-const timeFmt = new Intl.DateTimeFormat("en-US", {
-  timeZone: TZ,
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: true,
-});
-const wallFmt = new Intl.DateTimeFormat("en-CA", {
-  timeZone: TZ,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-// The header date is compact — "Fri 22 Aug" — beside the timezone. The year is
-// noise on a page that only ever shows today.
-const headerFmt = new Intl.DateTimeFormat("en-GB", {
-  timeZone: TZ,
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-});
+  const dateFmt = fmt("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" });
+  // `hour: "2-digit"` keeps every reading eight characters, which the log's
+  // fixed-width time column depends on.
+  const timeFmt = fmt("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const dayFmt = fmt("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const zoneFmt = fmt("en-US", { timeZoneName: "long" });
+  const wallFmt = fmt("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 
-/** Current Amsterdam calendar date, YYYY-MM-DD. */
-export function todayAms(): string {
-  return dateFmt.format(new Date()); // en-CA formats as YYYY-MM-DD
-}
+  /** Wall clock of a UTC instant in this zone, encoded as a UTC ms value. */
+  const wallMs = (utcMs: number): number => {
+    const parts = wallFmt.formatToParts(new Date(utcMs));
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
+    return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"), get("second"));
+  };
 
-/** Amsterdam calendar date of an instant, YYYY-MM-DD. */
-export function amsDateOf(instant: Date): string {
-  return dateFmt.format(instant);
-}
+  /** YYYY-MM-DD. */
+  const date = (at: Date | string): string => dateFmt.format(new Date(at));
+  /** "09:41 AM". */
+  const time = (at: Date | string): string => timeFmt.format(new Date(at));
+  /** "Sat 22 Aug". */
+  const day = (at: Date | string): string => dayFmt.format(new Date(at));
 
-/** Compact Amsterdam date for a stored UTC ISO timestamp, e.g. "Sat 22 Aug". */
-export function amsDay(playedAtIso: string): string {
-  return headerFmt.format(new Date(playedAtIso));
-}
-
-/** HH:MM in Amsterdam for a stored UTC ISO timestamp. */
-export function amsTime(playedAtIso: string): string {
-  return timeFmt.format(new Date(playedAtIso));
-}
-
-/** Header date for today, e.g. "Sat 22 Aug". */
-export function todayDisplay(): string {
-  return headerFmt.format(new Date());
-}
-
-/** Amsterdam wall clock of a UTC instant, encoded as a UTC ms value. */
-function amsWallMs(utcMs: number): number {
-  const parts = wallFmt.formatToParts(new Date(utcMs));
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
-  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"), get("second"));
-}
-
-/** UTC instant of Amsterdam midnight starting `dateStr` (DST-safe). */
-function amsMidnightUtc(dateStr: string): Date {
-  const want = Date.parse(`${dateStr}T00:00:00Z`);
-  let guess = want;
-  for (let i = 0; i < 4; i++) {
-    const diff = amsWallMs(guess) - want;
-    if (diff === 0) break;
-    guess -= diff;
-  }
-  return new Date(guess);
-}
-
-function nextDay(dateStr: string): string {
-  const d = new Date(`${dateStr}T12:00:00Z`); // noon avoids date-line edges
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-/** UTC ISO range [start, end) covering the current Amsterdam day. */
-export function todayRangeUtc(): { startIso: string; endIso: string } {
-  const today = todayAms();
   return {
-    startIso: amsMidnightUtc(today).toISOString(),
-    endIso: amsMidnightUtc(nextDay(today)).toISOString(),
+    date,
+    time,
+    day,
+
+    /** "Pacific Standard Time", following daylight saving. Empty if unnamed. */
+    zone(at: Date | string): string {
+      return zoneFmt.formatToParts(new Date(at)).find((p) => p.type === "timeZoneName")?.value ?? "";
+    },
+
+    /** The time alone on `now`'s date, with the day in front otherwise. */
+    stamp(at: Date | string, now: Date): string {
+      return date(at) === date(now) ? time(at) : `${day(at)}, ${time(at)}`;
+    },
+
+    /**
+     * The instant `now`'s day began. A named zone is solved by stepping from
+     * midnight-read-as-UTC by the wall-clock error; never a fixed 24-hour
+     * offset, since days run 23 and 25 hours twice a year.
+     */
+    dayStart(now: Date): Date {
+      if (timeZone === undefined) {
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
+      const target = date(now);
+      const want = Date.parse(`${target}T00:00:00Z`);
+      let guess = want;
+      for (let i = 0; i < 4; i++) {
+        const diff = wallMs(guess) - want;
+        if (diff === 0) break;
+        guess -= diff;
+      }
+      // Where clocks skip midnight itself (Havana, the Azores), the day begins
+      // at the end of the gap, and the solver can settle just before it.
+      if (date(new Date(guess)) !== target) guess += want - wallMs(guess);
+      return new Date(guess);
+    },
   };
 }
+
+export type Clock = ReturnType<typeof clock>;
+
+export const AMSTERDAM = clock("Europe/Amsterdam");

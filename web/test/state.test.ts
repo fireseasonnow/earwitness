@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, setSystemTime, test }
 import { mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { RETENTION_MS } from "@earwitness/shared";
 
 /**
  * The page's read side degrades to a health state where the tracker refuses to
@@ -19,7 +20,7 @@ const PLAYS = join(DIR, "plays.json");
 const FLAG = join(DIR, "live.flag");
 
 // After the env var is set, so the module captures this directory.
-const { playsToday, liveFlag } = await import("../src/lib/state");
+const { recentPlays, liveFlag } = await import("../src/lib/state");
 
 /** A play stamped `msAgo` before the frozen clock. */
 function play(msAgo: number, credit: string): { detectedAt: string; credit: string } {
@@ -48,9 +49,9 @@ afterEach(() => {
   }
 });
 
-describe("playsToday — the three ways to end up with no rows", () => {
+describe("recentPlays — the three ways to end up with no rows", () => {
   test("no file at all: the tracker has not written yet", () => {
-    expect(playsToday()).toEqual([]);
+    expect(recentPlays()).toEqual([]);
   });
 
   test("a file that will not parse degrades instead of throwing", () => {
@@ -58,8 +59,8 @@ describe("playsToday — the three ways to end up with no rows", () => {
     // from a whole day of plays. The page must not: it would 500 on every
     // request until someone intervened.
     writePlays('{"version": 2, "plays": [{"detectedAt"');
-    expect(() => playsToday()).not.toThrow();
-    expect(playsToday()).toEqual([]);
+    expect(() => recentPlays()).not.toThrow();
+    expect(recentPlays()).toEqual([]);
   });
 
   test("a file from another release renders nothing rather than guessing", () => {
@@ -67,23 +68,23 @@ describe("playsToday — the three ways to end up with no rows", () => {
     // wrong or empty text on the page — worse than an honest "nothing yet"
     // while a staggered deploy finishes.
     writePlays({ version: 1, plays: [play(5 * MIN, "Ben Seretan — kokosing")] });
-    expect(playsToday()).toEqual([]);
+    expect(recentPlays()).toEqual([]);
   });
 
   test("the version must be exactly 2, not merely a number", () => {
     for (const version of [3, "2", null, undefined, 2.0000001]) {
       writePlays({ version, plays: [play(5 * MIN, "A — B")] });
-      expect(playsToday(), `version ${String(version)}`).toEqual([]);
+      expect(recentPlays(), `version ${String(version)}`).toEqual([]);
     }
   });
 
   test("a well-formed file with a non-array plays field is not trusted", () => {
     writePlays({ version: 2, plays: { "0": play(5 * MIN, "A — B") } });
-    expect(playsToday()).toEqual([]);
+    expect(recentPlays()).toEqual([]);
   });
 });
 
-describe("playsToday — reading a good file", () => {
+describe("recentPlays — reading a good file", () => {
   test("returns the day's plays oldest first, artist and title derived", () => {
     // Artist and title are NOT stored. They are `parseUnit(credit)` at the point
     // of use, which is why fixing the parser improves this morning's rows on the
@@ -92,7 +93,7 @@ describe("playsToday — reading a good file", () => {
       version: 2,
       plays: [play(90 * MIN, "Ben Seretan — kokosing"), play(5 * MIN, "Julia Holter — Sun Girl")],
     });
-    const rows = playsToday();
+    const rows = recentPlays();
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ artist: "Ben Seretan", title: "kokosing" });
     expect(rows[1]).toMatchObject({ artist: "Julia Holter", title: "Sun Girl" });
@@ -103,7 +104,7 @@ describe("playsToday — reading a good file", () => {
 
   test("a credit with no separator yields an empty artist, not a dropped row", () => {
     writePlays({ version: 2, plays: [play(5 * MIN, "no separator here")] });
-    const rows = playsToday();
+    const rows = recentPlays();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.artist).toBe("");
     expect(rows[0]!.title).toBe("no separator here");
@@ -111,45 +112,39 @@ describe("playsToday — reading a good file", () => {
 
   test("an empty day is an empty array, not a failure", () => {
     writePlays({ version: 2, plays: [] });
-    expect(playsToday()).toEqual([]);
+    expect(recentPlays()).toEqual([]);
   });
 });
 
-describe("playsToday — the day filter is a safety net, not the retention policy", () => {
-  test("yesterday's plays never render, even if the prune was missed", () => {
-    // The tracker prunes at rollover. Between a missed rollover and a page load,
-    // stale entries must still never reach the page.
+describe("recentPlays — the window filter is a safety net, not the retention policy", () => {
+  test("plays older than the window never render, even if the prune was missed", () => {
+    // A stopped tracker prunes nothing.
     writePlays({
       version: 2,
-      plays: [
-        play(20 * 60 * MIN, "Yesterday — gone"), // ~20 h ago, previous Ams day
-        play(30 * MIN, "Today — kept"),
-      ],
+      plays: [play(RETENTION_MS + MIN, "Expired — gone"), play(30 * MIN, "Recent — kept")],
     });
-    const titles = playsToday().map((p) => p.title);
-    expect(titles).toEqual(["kept"]);
+    expect(recentPlays().map((p) => p.title)).toEqual(["kept"]);
   });
 
-  test("a play stamped exactly at Amsterdam midnight belongs to the new day", () => {
-    // The range is half-open: >= start, < end. 2026-08-22T22:00:00Z is midnight
-    // starting the 23rd in summer time.
-    writePlays({
-      version: 2,
-      plays: [
-        { detectedAt: "2026-08-22T21:59:59.999Z", credit: "Before — excluded" },
-        { detectedAt: "2026-08-22T22:00:00.000Z", credit: "Boundary — included" },
-      ],
-    });
-    expect(playsToday().map((p) => p.title)).toEqual(["included"]);
+  test("the window is not the Amsterdam day: last night's plays are kept", () => {
+    // NOW is 14:00 Amsterdam. 20 h ago is the previous Amsterdam day, and still
+    // the current day for a reader in Los Angeles.
+    writePlays({ version: 2, plays: [play(20 * 60 * MIN, "Last night — kept")] });
+    expect(recentPlays().map((p) => p.title)).toEqual(["kept"]);
+  });
+
+  test("a play stamped exactly at the window's start is kept", () => {
+    writePlays({ version: 2, plays: [play(RETENTION_MS, "Boundary — included")] });
+    expect(recentPlays().map((p) => p.title)).toEqual(["included"]);
   });
 
   test("a play stamped in the future is not rendered", () => {
-    // Clock skew, or a hand-edited file. Either way it is not part of today.
+    // Clock skew, or a hand-edited file.
     writePlays({
       version: 2,
       plays: [{ detectedAt: "2026-08-24T06:00:00.000Z", credit: "Tomorrow — nope" }],
     });
-    expect(playsToday()).toEqual([]);
+    expect(recentPlays()).toEqual([]);
   });
 });
 

@@ -19,4 +19,4 @@ Allow: /
 # @astrojs/sitemap would emit an empty urlset — withastro/astro#3682 — and the
 # one URL it could list is the homepage every crawler starts from. A <lastmod>
 # would be the only thing a sitemap added, and on a page that changes every 30 s
-# and empties at Amsterdam midnight there is no honest value to put in it.
+# and empties at each reader's midnight there is no honest value to put in it.
