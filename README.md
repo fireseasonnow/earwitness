@@ -1,5 +1,7 @@
 # Earwitness
 
+[![CI](https://github.com/fireseasonnow/earwitness/actions/workflows/ci.yml/badge.svg)](https://github.com/fireseasonnow/earwitness/actions/workflows/ci.yml)
+
 [Claude FM](https://www.youtube.com/@claude/live), Anthropic's 24/7 stream, names
 the song it is playing in exactly one place: a credit ticker scrolling through a
 corner of the video. Nothing publishes it as text, and each name is gone as soon
@@ -48,6 +50,12 @@ Amsterdam day.
 bun install                                  # once, at the ROOT: it is a workspace
 cd tracker && bun run tracker.ts             # terminal 1
 cd web     && bun run dev                    # terminal 2 → localhost:4321
+```
+
+Tests, from the root, for all three packages (CI runs the same on every push):
+
+```bash
+bun test
 ```
 
 Install at the workspace root: inside one package instead, Vite resolves
